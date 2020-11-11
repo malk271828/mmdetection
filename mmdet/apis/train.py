@@ -1,4 +1,5 @@
 import random
+from copy import copy
 
 import numpy as np
 import torch
@@ -11,7 +12,7 @@ from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.utils import get_root_logger
-
+from mmdet.runner import CooperativeTrainRunner
 
 def set_random_seed(seed, deterministic=False):
     """Set random seed.
@@ -83,13 +84,23 @@ def train_detector(model,
             model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
 
     # build runner
-    optimizer = build_optimizer(model, cfg.optimizer)
-    runner = EpochBasedRunner(
-        model,
-        optimizer=optimizer,
-        work_dir=cfg.work_dir,
-        logger=logger,
-        meta=meta)
+    if cfg.optimizer_config["type"] == "CooperativeOptimizerHook":
+        model1, model2 = model, copy(model)
+        optimizer1, optimizer2 = build_optimizer(model1, cfg.optimizer), build_optimizer(model2, cfg.optimizer)
+        runner = CooperativeTrainRunner(
+            models=[model1, model2],
+            optimizers=[optimizer1, optimizer2],
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
+    else:
+        optimizer = build_optimizer(model, cfg.optimizer)
+        runner = EpochBasedRunner(
+            model,
+            optimizer=optimizer,
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
     # an ugly workaround to make .log and .log.json filenames the same
     runner.timestamp = timestamp
 
