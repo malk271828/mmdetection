@@ -57,7 +57,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 if isinstance(hook, OptimizerHook):
                     opt_hook = hook
             if isinstance(opt_hook, CooperativeOptimizerHook):
-                outputs = [model.train_step(data_batch, self.optimizer, **kwargs) for model in self.models]
+                outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
