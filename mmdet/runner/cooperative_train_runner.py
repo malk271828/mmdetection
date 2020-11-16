@@ -13,7 +13,7 @@ from mmcv.runner.checkpoint import save_checkpoint
 from mmcv.runner.utils import get_host_info
 
 from mmcv.runner.hooks import OptimizerHook
-from mmdet.core.utils.coteach_utils import CooperativeOptimizerHook
+from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook
 
 @RUNNERS.register_module()
 class CooperativeTrainRunner(EpochBasedRunner):
@@ -31,6 +31,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
                  max_epochs=None):
         if len(models)!=len(optimizers):
             raise Exception("number of models and optimizers must be equal {0}!={1}".format(len(models), len(optimizers)))
+        if len(models) != len(set(models)) or len(optimizers) != len(set(optimizers)):
+            raise Exception("models or optimizers include same instance(s)")
 
         self.batch_processor = batch_processor
         # init with the first model and optimizer
@@ -56,7 +58,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             for hook in self._hooks:
                 if isinstance(hook, OptimizerHook):
                     opt_hook = hook
-            if isinstance(opt_hook, CooperativeOptimizerHook):
+            if isinstance(opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
@@ -68,3 +70,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
         if 'log_vars' in outputs:
             self.log_buffer.update(outputs['log_vars'], outputs['num_samples'])
         self.outputs = outputs
+    
+    def train(self, data_loader, **kwargs):
+        for model in self.models:
+            model.train()
+        super().train(data_loader, **kwargs)

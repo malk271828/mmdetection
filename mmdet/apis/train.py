@@ -1,5 +1,5 @@
 import random
-from copy import copy
+from copy import deepcopy
 
 import numpy as np
 import torch
@@ -69,24 +69,24 @@ def train_detector(model,
             seed=cfg.seed) for ds in dataset
     ]
 
-    # put model on gpus
-    # if distributed:
-    #     find_unused_parameters = cfg.get('find_unused_parameters', False)
-    #     # Sets the `find_unused_parameters` parameter in
-    #     # torch.nn.parallel.DistributedDataParallel
-    #     model = MMDistributedDataParallel(
-    #         model.cuda(),
-    #         device_ids=[torch.cuda.current_device()],
-    #         broadcast_buffers=False,
-    #         find_unused_parameters=find_unused_parameters)
-    # else:
-    #     model = MMDataParallel(
-    #         model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
+    put model on gpus
+    if distributed:
+        find_unused_parameters = cfg.get('find_unused_parameters', False)
+        # Sets the `find_unused_parameters` parameter in
+        # torch.nn.parallel.DistributedDataParallel
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=find_unused_parameters)
+    else:
+        model = MMDataParallel(
+            model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
 
     # build runner
     if "type" in cfg.optimizer_config.keys():
         if cfg.optimizer_config["type"] == "CooperativeOptimizerHook":
-            model1, model2 = model, copy(model)
+            model1, model2 = model, deepcopy(model)
             optimizer1, optimizer2 = build_optimizer(model1, cfg.optimizer), build_optimizer(model2, cfg.optimizer)
             runner = CooperativeTrainRunner(
                 models=[model1, model2],
