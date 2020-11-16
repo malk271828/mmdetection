@@ -59,4 +59,5 @@ data = dict(
     test=dict(pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
-optimizer_config = dict(_delete_=True)
+# optimizer_config = dict(type="CoteachingOptimizerHook",
+#                         cooperative_method="coteaching") # ["coteaching", "distillation"]
