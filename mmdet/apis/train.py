@@ -85,7 +85,7 @@ def train_detector(model,
 
     # build runner
     if "type" in cfg.optimizer_config.keys():
-        if cfg.optimizer_config["type"] == "CooperativeOptimizerHook":
+        if cfg.optimizer_config["type"] in ["CoteachingOptimizerHook", "DistillationOptimizerHook"]:
             model1, model2 = model, deepcopy(model)
             optimizer1, optimizer2 = build_optimizer(model1, cfg.optimizer), build_optimizer(model2, cfg.optimizer)
             runner = CooperativeTrainRunner(
