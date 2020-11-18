@@ -80,17 +80,18 @@ def train_detector(model,
             broadcast_buffers=False,
             find_unused_parameters=find_unused_parameters)
     else:
-        model = MMDataParallel(
-            model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
+        models = model if isinstance(model, (list, tuple)) else [model]
+        models = [MMDataParallel(
+            model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
+        model = models[0]
 
     # build runner
     if "type" in cfg.optimizer_config.keys():
-        if cfg.optimizer_config["type"] in ["CoteachingOptimizerHook", "DistillationOptimizerHook"]:
-            model1, model2 = model, deepcopy(model)
-            optimizer1, optimizer2 = build_optimizer(model1, cfg.optimizer), build_optimizer(model2, cfg.optimizer)
+        if cfg.optimizer_config["type"] in ["CoteachingOptimizerHook", "DistillationOptimizerHook"]:            
+            optimizers = [build_optimizer(model, cfg.optimizer) for model in models]
             runner = CooperativeTrainRunner(
-                models=[model1, model2],
-                optimizers=[optimizer1, optimizer2],
+                models=models,
+                optimizers=optimizers,
                 work_dir=cfg.work_dir,
                 logger=logger,
                 meta=meta)

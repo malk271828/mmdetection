@@ -63,7 +63,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
-            outputs = self.model.val_step(data_batch, self.optimizer, **kwargs)
+            outputs = [model.val_step(data_batch, self.optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
         if not isinstance(outputs[0], dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
                             'and "model.val_step()" must return a dict')
