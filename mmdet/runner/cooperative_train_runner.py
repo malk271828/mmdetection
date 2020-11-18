@@ -3,8 +3,10 @@ import platform
 import shutil
 import time
 import warnings
+from pprint import pprint
 
 import torch
+from torchviz import make_dot
 
 import mmcv
 from mmcv.runner import EpochBasedRunner
@@ -12,6 +14,7 @@ from mmcv.runner.builder import RUNNERS
 from mmcv.runner.checkpoint import save_checkpoint
 from mmcv.runner.utils import get_host_info
 
+# custom class
 from mmcv.runner.hooks import OptimizerHook
 from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook
 
@@ -50,6 +53,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
         ----------
         https://github.com/open-mmlab/mmdetection/blob/master/mmdet/models/detectors/base.py
         """
+        verbose = 0
         if self.batch_processor is not None:
             outputs = self.batch_processor(
                 self.model, data_batch, train_mode=train_mode, **kwargs)
@@ -60,6 +64,9 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     opt_hook = hook
             if isinstance(opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
+                if verbose > 1:
+                    for model, output in zip(self.models, outputs):
+                        make_dot(output, params=dict(model.named_parameters()))
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
