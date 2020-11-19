@@ -4,6 +4,8 @@ import shutil
 import time
 import warnings
 from pprint import pprint
+from colorama import *
+init()
 
 import torch
 from torchviz import make_dot
@@ -65,8 +67,11 @@ class CooperativeTrainRunner(EpochBasedRunner):
             if isinstance(opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
                 if verbose > 1:
-                    for model, output in zip(self.models, outputs):
-                        make_dot(output, params=dict(model.named_parameters()))
+                    for i, (model, output) in enumerate(zip(self.models, outputs)):
+                        file_path = "model_{0}".format(i)
+                        if not osp.exists(file_path):
+                            make_dot(output, params=dict(model.named_parameters())).render(file_path, format="png")
+                        print(Fore.CYAN + file_path + Style.RESET_ALL)
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
