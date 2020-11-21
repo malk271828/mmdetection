@@ -68,14 +68,14 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
                 if verbose > 1:
                     for i, (model, output) in enumerate(zip(self.models, outputs)):
-                        file_path = "model_{0}".format(i)
+                        file_path = "model_{0}.png".format(i)
                         if not osp.exists(file_path):
                             make_dot(output, params=dict(model.named_parameters())).render(file_path, format="png")
-                        print(Fore.CYAN + file_path + Style.RESET_ALL)
+                        print(Fore.CYAN + "output computational graph : {0}".format(file_path) + Style.RESET_ALL)
             else:
                 raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
-            outputs = [model.val_step(data_batch, self.optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
+            outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
         if not isinstance(outputs[0], dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
                             'and "model.val_step()" must return a dict')
