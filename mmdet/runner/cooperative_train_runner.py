@@ -3,7 +3,6 @@ import platform
 import shutil
 import time
 import warnings
-import numpy as np
 from pprint import pprint
 from colorama import *
 init()
@@ -51,13 +50,6 @@ class CooperativeTrainRunner(EpochBasedRunner):
         self.models = models
         self.optimizers = optimizers
 
-        if dr_config:
-            # define drop rate schedule
-            rate_schedule = np.ones(self._max_epochs) * dr_config.max_drop_rate
-            rate_schedule[:dr_config.num_gradual] = np.linspace(0, dr_config.max_drop_rate, dr_config.num_gradual)
-        else:
-            rate_schedule = np.linspace(0, 0.8, self._max_epochs)
-
     def run_iter(self, data_batch, train_mode, **kwargs):
         """
         References
@@ -93,7 +85,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
         if 'log_vars' in outputs:
             self.log_buffer.update(outputs['log_vars'], outputs['num_samples'])
         self.outputs = outputs
-    
+
     def train(self, data_loader, **kwargs):
         for model in self.models:
             model.train()
