@@ -37,12 +37,12 @@ class CoteachingOptimizerHook(OptimizerHook):
             runner.logger.warning("runner.models attribute must be list type in CoteachOptimizerHook. But got {0}".format(type(runner.models)))
 
         # co-teaching logic
-        loss0 = runner.outputs[0]["loss"]
-        loss1 = runner.outputs[1]["loss"]
+        loss0 = runner.outputs[0]["losses"]
+        loss1 = runner.outputs[1]["losses"]
 
-        ind0_sorted = np.argsort(loss0.data).cuda()
+        ind0_sorted = np.argsort(loss0.data.cpu()).cuda()
         loss0_sorted = loss0[ind0_sorted]
-        ind1_sorted = np.argsort(loss1.data).cuda()
+        ind1_sorted = np.argsort(loss1.data.cpu()).cuda()
         #loss1_sorted = loss1[ind1_sorted]
 
         remember_rate = 1 - self.rate_schedule[self.epoch]
