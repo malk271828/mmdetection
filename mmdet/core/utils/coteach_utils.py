@@ -37,12 +37,14 @@ class CoteachingOptimizerHook(OptimizerHook):
             runner.logger.warning("runner.models attribute must be list type in CoteachOptimizerHook. But got {0}".format(type(runner.models)))
 
         # co-teaching logic
-        loss0 = runner.outputs[0]["losses"]
-        loss1 = runner.outputs[1]["losses"]
+        zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
+        zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
+        loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
+        loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
 
-        ind0_sorted = np.argsort(loss0.data.cpu()).cuda()
+        ind0_sorted = torch.argsort(loss0)
         loss0_sorted = loss0[ind0_sorted]
-        ind1_sorted = np.argsort(loss1.data.cpu()).cuda()
+        ind1_sorted = torch.argsort(loss1)
         #loss1_sorted = loss1[ind1_sorted]
 
         remember_rate = 1 - self.rate_schedule[self.epoch]
@@ -80,7 +82,7 @@ class DistillationOptimizerHook(OptimizerHook):
     ----------
     https://mmdetection.readthedocs.io/en/v2.5.0/tutorials/customize_runtime.html#customize-self-implemented-optimizer
     """
-    def __init__(self, grad_clip=None, cooperative_method=None):
+    def __init__(self, grad_clip=None, cooperative_method=None, dr_config=None):
         self.grad_clip = grad_clip
 
     def clip_grads(self, params):

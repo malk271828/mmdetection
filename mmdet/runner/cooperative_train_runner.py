@@ -82,8 +82,11 @@ class CooperativeTrainRunner(EpochBasedRunner):
         if not isinstance(outputs[0], dict):
             raise TypeError('"batch_processor()" or "model.train_step()"'
                             'and "model.val_step()" must return a dict')
-        if 'log_vars' in outputs:
-            self.log_buffer.update(outputs['log_vars'], outputs['num_samples'])
+        for i, output in enumerate(outputs):
+            output["log_vars"]["loss_cls"+str(i)] = output["log_vars"].pop("loss_cls")
+            output["log_vars"]["loss_bbox"+str(i)] = output["log_vars"].pop("loss_bbox")
+            if 'log_vars' in output:
+                self.log_buffer.update(output['log_vars'], output['num_samples'])
         self.outputs = outputs
 
     def train(self, data_loader, **kwargs):
