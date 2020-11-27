@@ -8,10 +8,11 @@ from mmdet.utils import get_root_logger
 @HOOKS.register_module()
 class CoteachingOptimizerHook(OptimizerHook):
     """
+    co-teaching logic
+
     References
     ----------
     https://mmdetection.readthedocs.io/en/v2.5.0/tutorials/customize_runtime.html#customize-self-implemented-optimizer
-
     https://github.com/bhanML/Co-teaching/blob/master/loss.py
     """
     def __init__(self, grad_clip=None, cooperative_method=None, dr_config=None):
@@ -47,7 +48,8 @@ class CoteachingOptimizerHook(OptimizerHook):
         ind1_sorted = torch.argsort(loss1)
         #loss1_sorted = loss1[ind1_sorted]
 
-        remember_rate = 1 - self.rate_schedule[self.epoch]
+        drop_rate = self.rate_schedule[runner.epoch]
+        remember_rate = 1 - self.rate_schedule[runner.epoch]
         num_remember = int(remember_rate * len(loss0_sorted))
 
         # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
@@ -56,7 +58,7 @@ class CoteachingOptimizerHook(OptimizerHook):
         ind0_update=ind0_sorted[:num_remember]
         ind1_update=ind1_sorted[:num_remember]
 
-        # exchange
+        # exchange data sample index
         loss0_update = loss0[ind1_update]
         loss1_update = loss1[ind0_update]
 
@@ -67,6 +69,8 @@ class CoteachingOptimizerHook(OptimizerHook):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        # update log buffer
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
             if grad_norm is not None:
@@ -74,6 +78,8 @@ class CoteachingOptimizerHook(OptimizerHook):
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
                                          runner.outputs['num_samples'])
 
+        # update log buffer for co-teaching
+        runner.log_buffer.update({"drop_rate": drop_rate})
 
 @HOOKS.register_module()
 class DistillationOptimizerHook(OptimizerHook):
@@ -82,8 +88,9 @@ class DistillationOptimizerHook(OptimizerHook):
     ----------
     https://mmdetection.readthedocs.io/en/v2.5.0/tutorials/customize_runtime.html#customize-self-implemented-optimizer
     """
-    def __init__(self, grad_clip=None, cooperative_method=None, dr_config=None):
+    def __init__(self, grad_clip=None, cooperative_method=None, distill_config=None):
         self.grad_clip = grad_clip
+        self.distill_config = distill_config
 
     def clip_grads(self, params):
         params = list(
@@ -97,12 +104,11 @@ class DistillationOptimizerHook(OptimizerHook):
         for optimizer, output in zip(runner.optimizers, runner.outputs):
             optimizer.zero_grad()
             output["loss"].backward()
+            optimizer.step()
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
             if grad_norm is not None:
                 # Add grad norm to the logger
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
                                          runner.outputs['num_samples'])
-        for optimizer in runner.optimizers:
-            optimizer.step()
 
