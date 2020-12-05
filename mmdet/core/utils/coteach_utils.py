@@ -117,12 +117,12 @@ class DistillationOptimizerHook(OptimizerHook):
     def before_train_iter(self, runner):
         if self.teacher_model is None:
             # init detector
-            self.teacher_model = build_detector(self.distill_config, checkpoint=self.distill_config.checkpoint)
+            self.teacher_model = build_detector(self.distill_config, test_cfg=self.distill_config.test_cfg)
 
             # same logic to init_detector API
             if checkpoint is not None:
                     map_loc = "cpu"
-                    checkpoint = load_checkpoint(self.teacher_model, checkpoint, map_location=map_loc)
+                    checkpoint = load_checkpoint(self.teacher_model, self.distill_config.checkpoint, map_location=map_loc)
                     if 'CLASSES' in checkpoint['meta']:
                         self.teacher_model.CLASSES = checkpoint['meta']['CLASSES']
                     else:

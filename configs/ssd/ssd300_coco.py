@@ -63,5 +63,16 @@ optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 #                         cooperative_method="coteaching",
 #                         dr_config=dict(max_drop_rate=0.2, num_gradual=20)) # ["coteaching", "distillation"]
 # optimizer_config = dict(type="DistillationOptimizerHook",
-#                         distillation_method="distillation",
-#                         distill_config=dict(alpha=0.2, beta=20)) # ["coteaching", "distillation"]
+#                         distillation_method="naive",
+#                         distill_config=dict(
+#                             alpha=0.2,
+#                             beta=20,
+#                             checkpoint="checkpoint/yolov3_d53_320_273e_coco-421362b6.pth",
+#                             test_cfg = dict(
+#                                 nms=dict(type='nms', iou_threshold=0.45),
+#                                 min_bbox_size=0,
+#                                 score_thr=0.02,
+#                                 max_per_img=200
+#                             )
+#                         )
+#                     )
