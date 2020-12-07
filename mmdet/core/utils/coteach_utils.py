@@ -114,10 +114,10 @@ class DistillationOptimizerHook(OptimizerHook):
         if len(params) > 0:
             return clip_grad.clip_grad_norm_(params, **self.grad_clip)
 
-    def before_train_iter(self, runner):
+    def __before_train_iter(self, runner):
         if self.teacher_model is None:
             # init detector
-            self.teacher_model = build_detector(self.distill_config, test_cfg=self.distill_config.test_cfg)
+            self.teacher_model = build_detector(self.distill_config.model, test_cfg=self.distill_config.test_cfg)
 
             # same logic to init_detector API
             if checkpoint is not None:

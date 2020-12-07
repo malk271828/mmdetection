@@ -67,12 +67,43 @@ optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 #                         distill_config=dict(
 #                             alpha=0.2,
 #                             beta=20,
-#                             checkpoint="checkpoint/yolov3_d53_320_273e_coco-421362b6.pth",
+#                             checkpoint="checkpoints/ssd300_coco_20200307-a92d2092.pth",
 #                             test_cfg = dict(
 #                                 nms=dict(type='nms', iou_threshold=0.45),
 #                                 min_bbox_size=0,
 #                                 score_thr=0.02,
 #                                 max_per_img=200
+#                             ),
+#                             model = dict(
+#                                 type='SingleStageDetector',
+#                                 pretrained='open-mmlab://vgg16_caffe',
+#                                 backbone=dict(
+#                                     type='SSDVGG',
+#                                     input_size=300,
+#                                     depth=16,
+#                                     with_last_pool=False,
+#                                     ceil_mode=True,
+#                                     out_indices=(3, 4),
+#                                     out_feature_indices=(22, 34),
+#                                     l2_norm_scale=20),
+#                                 neck=None,
+#                                 bbox_head=dict(
+#                                     type='SSDHead',
+#                                     in_channels=(512, 1024, 512, 256, 256, 256),
+#                                     num_classes=80,
+#                                     anchor_generator=dict(
+#                                         type='SSDAnchorGenerator',
+#                                         scale_major=False,
+#                                         input_size=300,
+#                                         basesize_ratio_range=(0.15, 0.9),
+#                                         strides=[8, 16, 32, 64, 100, 300],
+#                                         ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]]),
+#                                     bbox_coder=dict(
+#                                         type='DeltaXYWHBBoxCoder',
+#                                         target_means=[.0, .0, .0, .0],
+#                                         target_stds=[0.1, 0.1, 0.2, 0.2]
+#                                     )
+#                                 )
 #                             )
 #                         )
 #                     )
