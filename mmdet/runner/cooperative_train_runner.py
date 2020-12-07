@@ -18,7 +18,7 @@ from mmcv.runner.utils import get_host_info
 
 # custom class
 from mmcv.runner.hooks import OptimizerHook
-from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook
+from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook, DistillationOptimizerHook
 
 @RUNNERS.register_module()
 class CooperativeTrainRunner(EpochBasedRunner):
@@ -65,7 +65,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             for hook in self._hooks:
                 if isinstance(hook, OptimizerHook):
                     opt_hook = hook
-            if isinstance(opt_hook, CoteachingOptimizerHook):
+            if isinstance(opt_hook, CoteachingOptimizerHook) or isinstance(opt_hook, DistillationOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
                 # model visualization
@@ -76,7 +76,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                             make_dot(output, params=dict(model.named_parameters())).render(file_path, format="png")
                         print(Fore.CYAN + "output computational graph : {0}".format(file_path) + Style.RESET_ALL)
             else:
-                raise Exception("expected optimizer type is CooperativeOptimizerHook. But got: {0}".format(type(opt_hook)))
+                raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
         if not isinstance(outputs[0], dict):

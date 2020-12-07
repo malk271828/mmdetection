@@ -89,7 +89,8 @@ def train_detector(model,
         # load teacher model
         if hasattr(cfg.optimizer_config, "distill_config"):
             distill_config = cfg.optimizer_config.distill_config
-            teacher_model = build_detector(distill_config.model, test_cfg=distill_config.test_cfg)
+            teacher_model = build_detector(distill_config.model,
+                train_cfg=distill_config.train_cfg, test_cfg=distill_config.test_cfg)
 
             # same logic to init_detector API
             if distill_config.checkpoint is not None:
