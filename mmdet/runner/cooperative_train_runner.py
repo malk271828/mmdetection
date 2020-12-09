@@ -65,7 +65,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             for hook in self._hooks:
                 if isinstance(hook, OptimizerHook):
                     opt_hook = hook
-            if isinstance(opt_hook, CoteachingOptimizerHook) or isinstance(opt_hook, DistillationOptimizerHook):
+            if isinstance(opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
                 # model visualization
@@ -75,6 +75,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
                         if not osp.exists(file_path):
                             make_dot(output, params=dict(model.named_parameters())).render(file_path, format="png")
                         print(Fore.CYAN + "output computational graph : {0}".format(file_path) + Style.RESET_ALL)
+            elif isinstance(opt_hook, DistillationOptimizerHook):
+                outputs = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
