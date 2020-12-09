@@ -75,15 +75,20 @@ class CooperativeTrainRunner(EpochBasedRunner):
                         if not osp.exists(file_path):
                             make_dot(output, params=dict(model.named_parameters())).render(file_path, format="png")
                         print(Fore.CYAN + "output computational graph : {0}".format(file_path) + Style.RESET_ALL)
+
+                # check output type
+                if not isinstance(outputs[0], dict):
+                    raise TypeError('"batch_processor()" or "model.train_step()"'
+                                    'and "model.val_step()" must return a dict')
+
             elif isinstance(opt_hook, DistillationOptimizerHook):
                 outputs = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
-        if not isinstance(outputs[0], dict):
-            raise TypeError('"batch_processor()" or "model.train_step()"'
-                            'and "model.val_step()" must return a dict')
+
+        # register losses to log_buffer
         for i, output in enumerate(outputs):
             output["log_vars"]["loss_cls"+str(i)] = output["log_vars"].pop("loss_cls")
             output["log_vars"]["loss_bbox"+str(i)] = output["log_vars"].pop("loss_bbox")
