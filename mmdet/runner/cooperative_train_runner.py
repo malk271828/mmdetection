@@ -25,7 +25,7 @@ from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook, Distillation
 class CustomDataParallel(MMDataParallel):
     def forward_dummy(self, *inputs, **kwargs):
         inputs, kwargs = self.scatter(inputs, kwargs, self.device_ids)
-        return self.module.forward_dummy(*inputs)
+        return self.module.forward_dummy(inputs[0][0]["img"])
 
 @RUNNERS.register_module()
 class CooperativeTrainRunner(EpochBasedRunner):
@@ -96,11 +96,12 @@ class CooperativeTrainRunner(EpochBasedRunner):
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
         # register losses to log_buffer
-        for i, output in enumerate(outputs):
-            output["log_vars"]["loss_cls"+str(i)] = output["log_vars"].pop("loss_cls")
-            output["log_vars"]["loss_bbox"+str(i)] = output["log_vars"].pop("loss_bbox")
-            if 'log_vars' in output:
-                self.log_buffer.update(output['log_vars'], output['num_samples'])
+        if not isinstance(opt_hook, DistillationOptimizerHook):
+            for i, output in enumerate(outputs):
+                output["log_vars"]["loss_cls"+str(i)] = output["log_vars"].pop("loss_cls")
+                output["log_vars"]["loss_bbox"+str(i)] = output["log_vars"].pop("loss_bbox")
+                if 'log_vars' in output:
+                    self.log_buffer.update(output['log_vars'], output['num_samples'])
         self.outputs = outputs
 
     def train(self, data_loader, **kwargs):
