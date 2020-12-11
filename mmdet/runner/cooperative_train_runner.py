@@ -23,7 +23,8 @@ from mmcv.runner.hooks import OptimizerHook
 from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook, DistillationOptimizerHook
 
 class CustomDataParallel(MMDataParallel):
-    def forward_dummy(self, *inputs):
+    def forward_dummy(self, *inputs, **kwargs):
+        inputs, kwargs = self.scatter(inputs, kwargs, self.device_ids)
         return self.module.forward_dummy(*inputs)
 
 @RUNNERS.register_module()
