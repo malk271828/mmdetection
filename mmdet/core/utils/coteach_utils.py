@@ -22,6 +22,8 @@ class CoteachingOptimizerHook(OptimizerHook):
     """
     co-teaching logic
 
+    naive co-teaching
+
     References
     ----------
     https://mmdetection.readthedocs.io/en/v2.5.0/tutorials/customize_runtime.html#customize-self-implemented-optimizer
@@ -50,33 +52,65 @@ class CoteachingOptimizerHook(OptimizerHook):
         if not (hasattr(runner, "models") and isinstance(runner.models, list)):
             runner.logger.warning("runner.models attribute must be list type in CoteachOptimizerHook. But got {0}".format(type(runner.models)))
 
-        # co-teaching logic
-        zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
-        zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
-        loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
-        loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
+            zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
+            zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
 
-        ind0_sorted = torch.argsort(loss0)
-        loss0_sorted = loss0[ind0_sorted]
-        ind1_sorted = torch.argsort(loss1)
-        #loss1_sorted = loss1[ind1_sorted]
+        if self.coteaching_method == "naive":
+            # co-teaching logic
+            loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
+            loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
 
-        drop_rate = self.rate_schedule[runner.epoch]
-        remember_rate = 1 - self.rate_schedule[runner.epoch]
-        num_remember = int(remember_rate * len(loss0_sorted))
+            ind0_sorted = torch.argsort(loss0)
+            loss0_sorted = loss0[ind0_sorted]
+            ind1_sorted = torch.argsort(loss1)
+            #loss1_sorted = loss1[ind1_sorted]
 
-        # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
-        # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
+            drop_rate = self.rate_schedule[runner.epoch]
+            remember_rate = 1 - self.rate_schedule[runner.epoch]
+            num_remember = int(remember_rate * len(loss0_sorted))
 
-        ind0_update=ind0_sorted[:num_remember]
-        ind1_update=ind1_sorted[:num_remember]
+            # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
+            # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
 
-        # exchange data sample index
-        loss0_update = loss0[ind1_update]
-        loss1_update = loss1[ind0_update]
+            ind0_update=ind0_sorted[:num_remember]
+            ind1_update=ind1_sorted[:num_remember]
 
-        # pack
-        loss_updates = [torch.sum(loss0_update/num_remember), torch.sum(loss1_update/num_remember)]
+            # exchange data sample index
+            loss0_update = loss0[ind1_update]
+            loss1_update = loss1[ind0_update]
+
+            # pack
+            loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
+        elif self.coteaching_method == "per_loss":
+            # co-teaching logic
+            loss_cls0  = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss0])
+            loss_bbox0 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss0])
+            loss_cls1 = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss1])
+            loss_bbox1 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss1])
+
+            ind0_sorted = torch.argsort(loss0)
+            loss0_sorted = loss0[ind0_sorted]
+            ind1_sorted = torch.argsort(loss1)
+            #loss1_sorted = loss1[ind1_sorted]
+
+            drop_rate = self.rate_schedule[runner.epoch]
+            remember_rate = 1 - self.rate_schedule[runner.epoch]
+            num_remember = int(remember_rate * len(loss0_sorted))
+
+            # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
+            # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
+
+            ind0_update=ind0_sorted[:num_remember]
+            ind1_update=ind1_sorted[:num_remember]
+
+            # exchange data sample index
+            loss0_update = loss0[ind1_update]
+            loss1_update = loss1[ind0_update]
+
+            # pack
+            loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
+        else:
+            raise Exception("unknown coteaching method")
 
         for optimizer, loss in zip(runner.optimizers, loss_updates):
             optimizer.zero_grad()

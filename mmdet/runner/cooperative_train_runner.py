@@ -16,9 +16,15 @@ from mmcv.runner.builder import RUNNERS
 from mmcv.runner.checkpoint import save_checkpoint
 from mmcv.runner.utils import get_host_info
 
+from mmcv.parallel import MMDataParallel
+
 # custom class
 from mmcv.runner.hooks import OptimizerHook
 from mmdet.core.utils.coteach_utils import CoteachingOptimizerHook, DistillationOptimizerHook
+
+class CustomDataParallel(MMDataParallel):
+    def forward_dummy(self, *inputs):
+        return self.module.forward_dummy(*inputs)
 
 @RUNNERS.register_module()
 class CooperativeTrainRunner(EpochBasedRunner):

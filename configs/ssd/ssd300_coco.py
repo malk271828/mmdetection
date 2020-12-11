@@ -60,8 +60,8 @@ data = dict(
 # optimizer
 optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 # optimizer_config = dict(type="CoteachingOptimizerHook",
-#                         cooperative_method="coteaching",
-#                         dr_config=dict(max_drop_rate=0.2, num_gradual=20)) # ["coteaching", "distillation"]
+#                         cooperative_method="naive",
+#                         dr_config=dict(max_drop_rate=0.2, num_gradual=20))
 # optimizer_config = dict(type="DistillationOptimizerHook",
 #                         distillation_method="naive",
 #                         distill_config=dict(

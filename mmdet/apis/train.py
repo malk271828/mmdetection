@@ -15,7 +15,7 @@ from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.models import build_detector
 from mmdet.utils import get_root_logger
-from mmdet.runner import CooperativeTrainRunner
+from mmdet.runner import CooperativeTrainRunner, CustomDataParallel
 
 def set_random_seed(seed, deterministic=False):
     """Set random seed.
@@ -113,9 +113,13 @@ def train_detector(model,
             # append teacher model to list
             models.append(teacher_model)
 
-        models = [MMDataParallel(
-            model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
-        model = models[0]
+            models = [CustomDataParallel(
+                model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
+            model = models[0]
+        else:
+            models = [MMDataParallel(
+                model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
+            model = models[0]
 
     # build runner
     if "type" in cfg.optimizer_config.keys():
