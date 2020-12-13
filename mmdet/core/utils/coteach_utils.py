@@ -146,7 +146,7 @@ class DistillationOptimizerHook(OptimizerHook):
         self.verbose = 0
 
         # extract distillation config
-        self.alpha = distill_config.aplha
+        self.alpha = distill_config.alpha
         self.beta = distill_config.beta
         self.gamma = distill_config.gamma
         self.temperature = distill_config.temperature
@@ -194,7 +194,7 @@ class DistillationOptimizerHook(OptimizerHook):
         student_optimizer = runner.optimizers[0]
         student_logits, teacher_logits = runner.logits
         student_losses, _ = runner.outputs
-        student_logits = torch.cat(student_logits)
+        student_logits = torch.cat([logit.flatten() for logit in student_logits])
 
         # Calculate distillation loss
         soft_log_probs = F.log_softmax(student_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
