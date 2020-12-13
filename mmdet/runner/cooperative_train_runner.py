@@ -89,20 +89,25 @@ class CooperativeTrainRunner(EpochBasedRunner):
                                     'and "model.val_step()" must return a dict')
 
             elif isinstance(opt_hook, DistillationOptimizerHook):
-                outputs = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
+                outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
+                logits = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
         # register losses to log_buffer
-        if not isinstance(opt_hook, DistillationOptimizerHook):
-            for i, output in enumerate(outputs):
-                output["log_vars"]["loss_cls"+str(i)] = output["log_vars"].pop("loss_cls")
-                output["log_vars"]["loss_bbox"+str(i)] = output["log_vars"].pop("loss_bbox")
-                if 'log_vars' in output:
-                    self.log_buffer.update(output['log_vars'], output['num_samples'])
+        if isinstance(opt_hook, DistillationOptimizerHook):
+            idx_str = ["student", "teacher"]
+        else:
+            idx_str = ["1", "2"]
+        for i, output in enumerate(outputs):
+            output["log_vars"]["loss_cls_"+idx_str[i]] = output["log_vars"].pop("loss_cls")
+            output["log_vars"]["loss_bbox_"+idx_str[i]] = output["log_vars"].pop("loss_bbox")
+            if 'log_vars' in output:
+                self.log_buffer.update(output['log_vars'], output['num_samples'])
         self.outputs = outputs
+        self.logits = logits
 
     def train(self, data_loader, **kwargs):
         for model in self.models:

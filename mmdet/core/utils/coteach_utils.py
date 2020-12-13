@@ -4,6 +4,7 @@ from colorama import *
 init()
 
 import torch
+import torch.nn.functional as F
 
 from mmdet.core import get_classes
 from mmcv.runner import load_checkpoint
@@ -16,6 +17,8 @@ from mmdet.utils import get_root_logger
 import sys
 sys.path.append("mmdet/models")
 from builder import build_detector
+
+EPSILON = 1.0e-10
 
 @HOOKS.register_module()
 class CoteachingOptimizerHook(OptimizerHook):
@@ -142,6 +145,15 @@ class DistillationOptimizerHook(OptimizerHook):
         self.teacher_model = None
         self.verbose = 0
 
+        # extract distillation config
+        self.alpha = distill_config.aplha
+        self.beta = distill_config.beta
+        self.gamma = distill_config.gamma
+        self.temperature = distill_config.temperature
+        self.num_classes = 80
+        self.use_focal = True
+        self.use_adaptive = False
+
     def clip_grads(self, params):
         params = list(
             filter(lambda p: p.requires_grad and p.grad is not None, params))
@@ -177,10 +189,61 @@ class DistillationOptimizerHook(OptimizerHook):
     def after_train_iter(self, runner):
         if not (hasattr(runner, "models") and isinstance(runner.models, list)):
             runner.logger.warning("runner.models attribute must be list type in DistillationOptimizerHook. But got {0}".format(type(runner.models)))
-        for optimizer, output in zip(runner.optimizers, runner.outputs):
-            optimizer.zero_grad()
-            output["loss"].backward()
-            optimizer.step()
+
+        # distinguish student/teacher loss and optimizer
+        student_optimizer = runner.optimizers[0]
+        student_logits, teacher_logits = runner.logits
+        student_losses, _ = runner.outputs
+        student_logits = torch.cat(student_logits)
+
+        # Calculate distillation loss
+        soft_log_probs = F.log_softmax(student_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+        soft_targets = F.softmax(teacher_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+        soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none")
+
+        if self.use_focal:
+            # compute focal term
+
+            # https://kornia.readthedocs.io/en/latest/_modules/kornia/losses/focal.html#FocalLoss
+            if self.use_adaptive:
+                # Normal entropy is calculated by multiplying probability and log-probability
+                # https://discuss.pytorch.org/t/calculating-the-entropy-loss/14510
+                if self.verbose > 0:
+                    print("use automated adaptative distillation")
+                soft_log_targets = F.log_softmax(teacher_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+                entropy_target = torch.mean(- soft_targets * soft_log_targets, dim=1).unsqueeze(1).expand(-1, self.num_classes)
+                soft_distance = soft_kl_div + self.beta * entropy_target
+            else:
+                if abs(self.alpha) < EPSILON or abs(self.alpha - 1.0) < EPSILON:
+                    if self.verbose > 0:
+                        print("Alpha-balancing is disabled")
+                    soft_distance = - soft_log_probs * soft_targets.detach()
+                else:
+                    if self.verbose > 0:
+                        print("Alpha-balancing is enabled")
+                    soft_distance = - (np.log(self.alpha) + soft_log_probs) * (1 - self.alpha) * soft_targets.detach()
+            focal_term = torch.pow(1. - torch.exp( - soft_distance), self.gamma)
+
+            if self.normalized:
+                norm_factor = 1.0 / (focal_term.sum() + 1e-5)
+            else:
+                norm_factor = 1.0
+            if self.verbose > 0:
+                print("focal_term shape:{0} range[{1}, {2}]".format(focal_term.shape, torch.min(focal_term), torch.max(focal_term)))
+                print("norm_factor: {0}".format(norm_factor))
+            focal_distillation_loss = focal_term.reshape(-1, self.num_classes) * norm_factor * soft_kl_div
+
+            sum_focal_distillation_loss = focal_distillation_loss.sum() / num_pos
+            sum_classification_loss = classification_loss.sum()
+            sum_regression_loss = regression_loss.sum()
+            overall_loss = self.loss_wts.distill * sum_focal_distillation_loss + self.loss_wts.student * (sum_regression_loss + sum_classification_loss)
+        else:
+            overall_loss = 0.3 * student_losses.sum() + 0.7 * soft_kl_div
+
+        student_optimizer.zero_grad()
+        overall_loss.backward()
+        student_optimizer.step()
+
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
             if grad_norm is not None:
