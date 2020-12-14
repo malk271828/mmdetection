@@ -192,13 +192,13 @@ class DistillationOptimizerHook(OptimizerHook):
 
         # distinguish student/teacher loss and optimizer
         student_optimizer = runner.optimizers[0]
-        student_logits, teacher_logits = runner.logits
+        (student_cls_logits, student_bbox_logits), (teacher_cls_logits, teacher_bbox_logits) = runner.logits
         student_losses, _ = runner.outputs
-        student_logits = torch.cat([logit.flatten() for logit in student_logits])
+        student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
 
         # Calculate distillation loss
-        soft_log_probs = F.log_softmax(student_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
-        soft_targets = F.softmax(teacher_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+        soft_log_probs = F.log_softmax(student_cls_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+        soft_targets = F.softmax(teacher_cls_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
         soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none")
 
         if self.use_focal:
@@ -210,7 +210,7 @@ class DistillationOptimizerHook(OptimizerHook):
                 # https://discuss.pytorch.org/t/calculating-the-entropy-loss/14510
                 if self.verbose > 0:
                     print("use automated adaptative distillation")
-                soft_log_targets = F.log_softmax(teacher_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
+                soft_log_targets = F.log_softmax(teacher_cls_logits.reshape(-1, self.num_classes) / self.temperature, dim=1)
                 entropy_target = torch.mean(- soft_targets * soft_log_targets, dim=1).unsqueeze(1).expand(-1, self.num_classes)
                 soft_distance = soft_kl_div + self.beta * entropy_target
             else:
