@@ -191,7 +191,7 @@ class DistillationOptimizerHook(OptimizerHook):
             runner.logger.warning("runner.models attribute must be list type in DistillationOptimizerHook. But got {0}".format(type(runner.models)))
 
         # distinguish student/teacher loss and optimizer
-        student_optimizer = runner.optimizers[0]
+        student_optimizer, _ = runner.optimizers
         (student_cls_logits, student_bbox_logits), (teacher_cls_logits, teacher_bbox_logits) = runner.logits
         student_losses, _ = runner.outputs
         student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])

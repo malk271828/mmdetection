@@ -102,6 +102,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
         else:
             idx_str = ["1", "2"]
         for i, output in enumerate(outputs):
+            output["log_vars"].pop("loss")
             output["log_vars"]["loss_cls_"+idx_str[i]] = output["log_vars"].pop("loss_cls")
             output["log_vars"]["loss_bbox_"+idx_str[i]] = output["log_vars"].pop("loss_bbox")
             if 'log_vars' in output:
