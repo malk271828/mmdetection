@@ -14,9 +14,9 @@ from mmdet.utils import get_root_logger
 # mmdet.models cannot be imported here
 # set path and import build_detector directly as a workaround
 # https://stackoverflow.com/questions/13763985/how-to-import-a-module-but-ignoring-the-packages-init-py
-import sys
-sys.path.append("mmdet/models")
-from builder import build_detector
+# import sys
+# sys.path.append("mmdet/models")
+# from builder import build_detector
 
 EPSILON = 1.0e-10
 
@@ -55,8 +55,8 @@ class CoteachingOptimizerHook(OptimizerHook):
         if not (hasattr(runner, "models") and isinstance(runner.models, list)):
             runner.logger.warning("runner.models attribute must be list type in CoteachOptimizerHook. But got {0}".format(type(runner.models)))
 
-            zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
-            zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
+        zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
+        zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
 
         if self.coteaching_method == "naive":
             # co-teaching logic

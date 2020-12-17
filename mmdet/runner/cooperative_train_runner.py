@@ -50,12 +50,13 @@ class CooperativeTrainRunner(EpochBasedRunner):
         self.batch_processor = batch_processor
         # init with the first model and optimizer
         super().__init__(models[0],
-            optimizer=optimizers[0],
+            optimizer={ "opt"+str(i+1): optimizer for i, optimizer in enumerate(optimizers)},
             work_dir=work_dir,
             logger=logger,
             meta=meta)
         self.models = models
         self.optimizers = optimizers
+        self.opt_hook = None
 
     def run_iter(self, data_batch, train_mode, **kwargs):
         """
@@ -64,15 +65,16 @@ class CooperativeTrainRunner(EpochBasedRunner):
         https://github.com/open-mmlab/mmdetection/blob/master/mmdet/models/detectors/base.py
         """
         verbose = 0
+        if not self.opt_hook:
+            # search the hook inherited from OptimizerHook
+            for hook in self._hooks:
+                if isinstance(hook, OptimizerHook):
+                    self.opt_hook = hook
         if self.batch_processor is not None:
             outputs = self.batch_processor(
                 self.model, data_batch, train_mode=train_mode, **kwargs)
         elif train_mode:
-            opt_hook = None
-            for hook in self._hooks:
-                if isinstance(hook, OptimizerHook):
-                    opt_hook = hook
-            if isinstance(opt_hook, CoteachingOptimizerHook):
+            if isinstance(self.opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
                 # model visualization
@@ -88,27 +90,26 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     raise TypeError('"batch_processor()" or "model.train_step()"'
                                     'and "model.val_step()" must return a dict')
 
-            elif isinstance(opt_hook, DistillationOptimizerHook):
+            elif isinstance(self.opt_hook, DistillationOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
-                logits = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
+                self.logits = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(opt_hook)))
         else:
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
         # register losses to log_buffer
-        if isinstance(opt_hook, DistillationOptimizerHook):
+        if isinstance(self.opt_hook, DistillationOptimizerHook):
             idx_str = ["student", "teacher"]
         else:
             idx_str = ["1", "2"]
         for i, output in enumerate(outputs):
-            output["log_vars"].pop("loss")
+            output["log_vars"]["loss_"+idx_str[i]] = output["log_vars"].pop("loss")
             output["log_vars"]["loss_cls_"+idx_str[i]] = output["log_vars"].pop("loss_cls")
             output["log_vars"]["loss_bbox_"+idx_str[i]] = output["log_vars"].pop("loss_bbox")
             if 'log_vars' in output:
                 self.log_buffer.update(output['log_vars'], output['num_samples'])
         self.outputs = outputs
-        self.logits = logits
 
     def train(self, data_loader, **kwargs):
         for model in self.models:
