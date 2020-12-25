@@ -31,6 +31,10 @@ class CoteachingOptimizerHook(OptimizerHook):
     ----------
     https://mmdetection.readthedocs.io/en/v2.5.0/tutorials/customize_runtime.html#customize-self-implemented-optimizer
     https://github.com/bhanML/Co-teaching/blob/master/loss.py
+
+    [Chadwick2019]
+    Chadwick, Simon, and Paul Newman. "Training object detectors with noisy data." 2019 IEEE Intelligent Vehicles Symposium (IV). IEEE, 2019.
+    https://arxiv.org/pdf/1905.07202.pdf
     """
     def __init__(self, grad_clip=None, coteaching_method=None, dr_config=None):
         self.grad_clip = grad_clip
@@ -84,8 +88,8 @@ class CoteachingOptimizerHook(OptimizerHook):
 
             # pack
             loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
-        elif self.coteaching_method == "per_loss":
-            # co-teaching logic
+        elif self.coteaching_method == "per_object":
+            # [Chadwick2019]
             loss_cls0  = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss0])
             loss_bbox0 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss0])
             loss_cls1 = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss1])

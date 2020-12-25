@@ -76,6 +76,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
         elif train_mode:
             if isinstance(self.opt_hook, CoteachingOptimizerHook):
                 outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
+                if self.opt_hook.coteaching_method == "per_object":
+                    self.logits = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
 
                 # model visualization
                 if verbose > 1:
