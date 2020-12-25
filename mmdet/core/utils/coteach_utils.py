@@ -88,7 +88,7 @@ class CoteachingOptimizerHook(OptimizerHook):
 
             # pack
             loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
-        elif self.coteaching_method == "per_object":
+        elif self.coteaching_method == "per-object":
             # [Chadwick2019]
             loss_cls0  = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss0])
             loss_bbox0 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss0])
