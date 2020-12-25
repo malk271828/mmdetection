@@ -116,7 +116,7 @@ def train_detector(model,
             models = [CustomDataParallel(
                 model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
             model = models[0]
-        elif cfg.coteaching_method=="per-object":
+        elif cfg.optimizer_config.coteaching_method=="per-object":
             models = [CustomDataParallel(
                 model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
             model = models[0]
