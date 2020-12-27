@@ -10,6 +10,9 @@ from ..builder import HEADS
 from ..losses import smooth_l1_loss
 from .anchor_head import AnchorHead
 
+from rich.progress import track
+from rich import pretty, print
+pretty.install()
 
 # TODO: add loss evaluator for SSD
 @HEADS.register_module()
@@ -118,7 +121,7 @@ class SSDHead(AnchorHead):
         return cls_scores, bbox_preds
 
     def loss_single(self, cls_score, bbox_pred, anchor, labels, label_weights,
-                    bbox_targets, bbox_weights, num_total_samples):
+                    bbox_targets, bbox_weights, num_total_samples, reduction=True):
         """Compute loss of a single image.
 
         Args:
@@ -139,6 +142,7 @@ class SSDHead(AnchorHead):
             num_total_samples (int): If sampling, num total samples equal to
                 the number of total anchors; Otherwise, it is the number of
                 positive anchors.
+            reduction: If enabled, reduce for bbox dimension.
 
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
@@ -146,19 +150,24 @@ class SSDHead(AnchorHead):
 
         loss_cls_all = F.cross_entropy(
             cls_score, labels, reduction='none') * label_weights
-        # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
-        pos_inds = ((labels >= 0) &
-                    (labels < self.num_classes)).nonzero().reshape(-1)
-        neg_inds = (labels == self.num_classes).nonzero().view(-1)
 
-        num_pos_samples = pos_inds.size(0)
-        num_neg_samples = self.train_cfg.neg_pos_ratio * num_pos_samples
-        if num_neg_samples > neg_inds.size(0):
-            num_neg_samples = neg_inds.size(0)
-        topk_loss_cls_neg, _ = loss_cls_all[neg_inds].topk(num_neg_samples)
-        loss_cls_pos = loss_cls_all[pos_inds].sum()
-        loss_cls_neg = topk_loss_cls_neg.sum()
-        loss_cls = (loss_cls_pos + loss_cls_neg) / num_total_samples
+        if reduction:
+            # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
+            pos_inds = ((labels >= 0) &
+                        (labels < self.num_classes)).nonzero().reshape(-1)
+            neg_inds = (labels == self.num_classes).nonzero().view(-1)
+
+            num_pos_samples = pos_inds.size(0)
+            num_neg_samples = self.train_cfg.neg_pos_ratio * num_pos_samples
+            if num_neg_samples > neg_inds.size(0):
+                num_neg_samples = neg_inds.size(0)
+            topk_loss_cls_neg, _ = loss_cls_all[neg_inds].topk(num_neg_samples)
+
+            loss_cls_pos = loss_cls_all[pos_inds].sum()
+            loss_cls_neg = topk_loss_cls_neg.sum()
+            loss_cls = (loss_cls_pos + loss_cls_neg) / num_total_samples
+        else:
+            loss_cls = loss_cls_all
 
         if self.reg_decoded_bbox:
             bbox_pred = self.bbox_coder.decode(anchor, bbox_pred)
@@ -255,5 +264,6 @@ class SSDHead(AnchorHead):
             all_label_weights,
             all_bbox_targets,
             all_bbox_weights,
-            num_total_samples=num_total_pos)
+            num_total_samples=num_total_pos,
+            reduction=True)
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
