@@ -70,7 +70,8 @@ class SingleStageDetector(BaseDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      gt_bboxes_ignore=None):
+                      gt_bboxes_ignore=None,
+                      reduction=True):
         """
         Args:
             img (Tensor): Input images of shape (N, C, H, W).
