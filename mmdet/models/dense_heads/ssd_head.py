@@ -151,13 +151,6 @@ class SSDHead(AnchorHead):
         if self.reg_decoded_bbox:
             bbox_pred = self.bbox_coder.decode(anchor, bbox_pred)
 
-        loss_bbox = smooth_l1_loss(
-            bbox_pred,
-            bbox_targets,
-            bbox_weights,
-            beta=self.train_cfg.smoothl1_beta,
-            avg_factor=num_total_samples)
-
         loss_cls_all = F.cross_entropy(
             cls_score, labels, reduction='none') * label_weights
 
@@ -176,8 +169,22 @@ class SSDHead(AnchorHead):
             loss_cls_pos = loss_cls_all[pos_inds].sum()
             loss_cls_neg = topk_loss_cls_neg.sum()
             loss_cls = (loss_cls_pos + loss_cls_neg) / num_total_samples
+
+            loss_bbox = smooth_l1_loss(
+                bbox_pred,
+                bbox_targets,
+                bbox_weights,
+                beta=self.train_cfg.smoothl1_beta,
+                avg_factor=num_total_samples)
         elif reduction == "none":
             loss_cls = loss_cls_all
+            loss_bbox = smooth_l1_loss(
+                bbox_pred,
+                bbox_targets,
+                bbox_weights,
+                beta=self.train_cfg.smoothl1_beta,
+                avg_factor=num_total_samples,
+                reduction=reduction)
             loss_bbox = loss_bbox.sum(dim=1)
         else:
             raise Exception("unknown reduction mode={0}".format(reduction))
@@ -269,5 +276,5 @@ class SSDHead(AnchorHead):
             all_bbox_targets,
             all_bbox_weights,
             num_total_samples=num_total_pos,
-            reduction="sum")
+            reduction=reduction)
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
