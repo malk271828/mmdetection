@@ -1,7 +1,8 @@
 import warnings
 import numpy as np
-from colorama import *
-init()
+from rich.progress import track
+from rich import pretty, print
+pretty.install()
 
 import torch
 import torch.nn.functional as F
@@ -48,78 +49,10 @@ class CoteachingOptimizerHook(OptimizerHook):
             return clip_grad.clip_grad_norm_(params, **self.grad_clip)
 
     def after_train_iter(self, runner):
-        if not hasattr(self, "rate_schedule"):
-            if self.dr_config:
-                # define drop rate schedule
-                self.rate_schedule = np.ones(runner.max_epochs) * self.dr_config.max_drop_rate
-                self.rate_schedule[:self.dr_config.num_gradual] = np.linspace(0, self.dr_config.max_drop_rate, self.dr_config.num_gradual)
-            else:
-                self.rate_schedule = np.linspace(0, 0.8, runner.max_epochs)
-
         if not (hasattr(runner, "models") and isinstance(runner.models, list)):
             runner.logger.warning("runner.models attribute must be list type in CoteachOptimizerHook. But got {0}".format(type(runner.models)))
 
-        zip_loss0 = zip(runner.outputs[0]["losses"]["loss_cls"], runner.outputs[0]["losses"]["loss_bbox"])
-        zip_loss1 = zip(runner.outputs[1]["losses"]["loss_cls"], runner.outputs[1]["losses"]["loss_bbox"])
-
-        if self.coteaching_method == "naive":
-            # co-teaching logic
-            loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
-            loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
-
-            ind0_sorted = torch.argsort(loss0)
-            loss0_sorted = loss0[ind0_sorted]
-            ind1_sorted = torch.argsort(loss1)
-            #loss1_sorted = loss1[ind1_sorted]
-
-            drop_rate = self.rate_schedule[runner.epoch]
-            remember_rate = 1 - self.rate_schedule[runner.epoch]
-            num_remember = int(remember_rate * len(loss0_sorted))
-
-            # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
-            # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
-
-            ind0_update=ind0_sorted[:num_remember]
-            ind1_update=ind1_sorted[:num_remember]
-
-            # exchange data sample index
-            loss0_update = loss0[ind1_update]
-            loss1_update = loss1[ind0_update]
-
-            # pack
-            loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
-        elif self.coteaching_method == "per-object":
-            # [Chadwick2019]
-            loss_cls0  = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss0])
-            loss_bbox0 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss0])
-            loss_cls1 = torch.cat([loss_cls for loss_cls, loss_bbox in zip_loss1])
-            loss_bbox1 = torch.cat([loss_bbox for loss_cls, loss_bbox in zip_loss1])
-
-            ind0_sorted = torch.argsort(loss0)
-            loss0_sorted = loss0[ind0_sorted]
-            ind1_sorted = torch.argsort(loss1)
-            #loss1_sorted = loss1[ind1_sorted]
-
-            drop_rate = self.rate_schedule[runner.epoch]
-            remember_rate = 1 - self.rate_schedule[runner.epoch]
-            num_remember = int(remember_rate * len(loss0_sorted))
-
-            # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
-            # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
-
-            ind0_update=ind0_sorted[:num_remember]
-            ind1_update=ind1_sorted[:num_remember]
-
-            # exchange data sample index
-            loss0_update = loss0[ind1_update]
-            loss1_update = loss1[ind0_update]
-
-            # pack
-            loss_updates = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
-        else:
-            raise Exception("unknown coteaching method")
-
-        for optimizer, loss in zip(runner.optimizers, loss_updates):
+        for optimizer, loss in zip(runner.optimizers, losses_update):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -131,9 +64,6 @@ class CoteachingOptimizerHook(OptimizerHook):
                 # Add grad norm to the logger
                 runner.log_buffer.update({'grad_norm': float(grad_norm)},
                                          runner.outputs['num_samples'])
-
-        # update log buffer for co-teaching
-        runner.log_buffer.update({"drop_rate": drop_rate})
 
 @HOOKS.register_module()
 class DistillationOptimizerHook(OptimizerHook):
