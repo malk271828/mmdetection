@@ -96,24 +96,34 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
                     loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
 
-                    ind0_sorted = torch.argsort(loss0)
-                    loss0_sorted = loss0[ind0_sorted]
-                    ind1_sorted = torch.argsort(loss1)
+                    if self.opt_hook.coteaching_method == "naive":
+                        argsort_dim = -1
+                    else:
+                        argsort_dim = 1
+                    ind0_sorted = torch.argsort(loss0, argsort_dim)
+                    loss0_sorted = loss0.gather(argsort_dim, ind0_sorted)
+                    ind1_sorted = torch.argsort(loss1, argsort_dim)
                     #loss1_sorted = loss1[ind1_sorted]
 
                     drop_rate = self.rate_schedule[self.epoch]
                     remember_rate = 1 - self.rate_schedule[self.epoch]
-                    num_remember = int(remember_rate * len(loss0_sorted))
 
-                    # pure_ratio_1 = np.sum(noise_or_not[ind[ind0_sorted[:num_remember]]])/float(num_remember)
-                    # pure_ratio_2 = np.sum(noise_or_not[ind[ind1_sorted[:num_remember]]])/float(num_remember)
+                    if self.opt_hook.coteaching_method == "naive":
+                        num_remember = int(remember_rate * len(loss0_sorted))
+                        ind0_update=ind0_sorted[:num_remember]
+                        ind1_update=ind1_sorted[:num_remember]
 
-                    ind0_update=ind0_sorted[:num_remember]
-                    ind1_update=ind1_sorted[:num_remember]
+                        # exchange data sample index
+                        loss0_update = loss0[ind1_update]
+                        loss1_update = loss1[ind0_update]                        
+                    else:
+                        num_remember = int(remember_rate * len(loss0_sorted[1]))
+                        ind0_update=ind0_sorted[:, :num_remember]
+                        ind1_update=ind1_sorted[:, :num_remember]
 
-                    # exchange data sample index
-                    loss0_update = loss0[ind1_update]
-                    loss1_update = loss1[ind0_update]
+                        # exchange data sample index
+                        loss0_update = loss0[:, ind1_update]
+                        loss1_update = loss1[:, ind0_update]                        
 
                     # pack
                     self.losses_update = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
