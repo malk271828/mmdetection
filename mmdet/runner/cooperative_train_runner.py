@@ -81,9 +81,9 @@ class CooperativeTrainRunner(EpochBasedRunner):
         elif train_mode:
             # construct rate_schedule
             if not hasattr(self, "rate_schedule"):
-                dr_config = self.opt_hook.dr_config
-                if dr_config:
+                if hasattr(self.opt_hook, "dr_config"):
                     # define drop rate schedule from config
+                    dr_config = self.opt_hook.dr_config
                     self.rate_schedule = np.ones(self.max_epochs) * dr_config.max_drop_rate
                     self.rate_schedule[:dr_config.num_gradual] = np.linspace(0, dr_config.max_drop_rate, dr_config.num_gradual)
                 else:
@@ -153,6 +153,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 
                 # update log buffer for co-teaching
                 self.log_buffer.update({"drop_rate": drop_rate})
+                self.log_buffer.update({"num_remember": num_remember})
 
             elif isinstance(self.opt_hook, DistillationOptimizerHook):
                 # logits value is required because log probability should be computed with a temperature parameter.
@@ -165,6 +166,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
 
                 # Calculate distillation loss
+                self.opt_hook.num_classes = 81 # TODO
                 soft_log_probs = F.log_softmax(student_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_targets = F.softmax(teacher_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none")
