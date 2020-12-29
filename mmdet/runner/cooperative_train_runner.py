@@ -62,6 +62,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
         self.models = models
         self.optimizers = optimizers
         self.opt_hook = None
+        self.verbose = 0
 
     def run_iter(self, data_batch, train_mode, **kwargs):
         """
@@ -75,6 +76,10 @@ class CooperativeTrainRunner(EpochBasedRunner):
             for hook in self._hooks:
                 if isinstance(hook, OptimizerHook):
                     self.opt_hook = hook
+                    if hasattr(self.opt_hook, "coteaching_method"):
+                        print("[cyan]{0} co-teaching is used[/cyan]".format(self.opt_hook.coteaching_method))
+                    else:
+                        print("[cyan]{0} distillation is used[/cyan]".format(self.opt_hook.distillation_method))
         if self.batch_processor is not None:
             outputs = self.batch_processor(
                 self.model, data_batch, train_mode=train_mode, **kwargs)
@@ -164,6 +169,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 (student_cls_logits, student_bbox_logits), (teacher_cls_logits, teacher_bbox_logits) = logits
                 student_losses = outputs[0]
                 student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
+                teacher_cls_logits = torch.cat([logit.flatten() for logit in teacher_cls_logits])
 
                 # Calculate distillation loss
                 self.opt_hook.num_classes = 81 # TODO

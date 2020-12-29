@@ -198,7 +198,8 @@ class SSDHead(AnchorHead):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             reduction="sum"):
         """Compute losses of the head.
 
         Args:

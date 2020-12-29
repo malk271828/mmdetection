@@ -79,8 +79,8 @@ class DistillationOptimizerHook(OptimizerHook):
         self.beta = distill_config.beta
         self.gamma = distill_config.gamma
         self.temperature = distill_config.temperature
-        self.use_focal = True
-        self.use_adaptive = False
+        self.use_focal = distill_config.use_focal
+        self.use_adaptive = distill_config.use_adaptive
 
     def clip_grads(self, params):
         params = list(
@@ -92,9 +92,10 @@ class DistillationOptimizerHook(OptimizerHook):
         if not (hasattr(runner, "models") and isinstance(runner.models, list)):
             runner.logger.warning("runner.models attribute must be list type in DistillationOptimizerHook. But got {0}".format(type(runner.models)))
 
-        runner.optimizer.zero_grad()
+        # It is assumed that opt1 is an optimizer for student model
+        runner.optimizer["opt1"].zero_grad()
         runner.overall_loss.backward()
-        runner.optimizer.step()
+        runner.optimizer["opt1"].step()
 
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
