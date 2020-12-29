@@ -167,18 +167,19 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 student_optimizer = self.optimizers[0]
                 (student_cls_logits, student_bbox_logits), (teacher_cls_logits, teacher_bbox_logits) = logits
                 student_losses = outputs[0]["loss"]
-                student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
-                teacher_cls_logits = torch.cat([logit.flatten() for logit in teacher_cls_logits])
 
                 # Calculate distillation loss
-                if hasattr(self.opt_hook, "num_classes"):
+                if not hasattr(self.opt_hook, "num_classes"):
                     self.opt_hook.num_classes = int(student_cls_logits[0].shape[1]/4)
                     print("[cyan] num_classes : {0}[/cyan]".format(self.opt_hook.num_classes))
-                if hasattr(self.opt_hook, "num_bboxes"):
+                if not hasattr(self.opt_hook, "num_bboxes"):
                     self.opt_hook.num_bboxes = 0
                     for logit in student_cls_logits:
                         self.opt_hook.num_bboxes += np.array(logit.shape[1:]).prod() / self.opt_hook.num_classes
                     print("[cyan] num_bboxes : {0}[/cyan]".format(self.opt_hook.num_bboxes))
+
+                student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
+                teacher_cls_logits = torch.cat([logit.flatten() for logit in teacher_cls_logits])
                 soft_log_probs = F.log_softmax(student_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_targets = F.softmax(teacher_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none") / self.opt_hook.num_bboxes
