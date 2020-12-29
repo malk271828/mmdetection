@@ -68,6 +68,8 @@ optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 #                             alpha=0.2,
 #                             beta=1.5,
 #                             gamma=2.0,
+#                             loss_wts_hard=0.7,
+#                             loss_wts_soft=0.3,
 #                             temperature=1.0,
 #                             use_focal=False,
 #                             use_adaptive=False,

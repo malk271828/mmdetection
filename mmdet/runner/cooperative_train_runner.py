@@ -41,7 +41,6 @@ class CooperativeTrainRunner(EpochBasedRunner):
                  models: list(),
                  batch_processor=None,
                  optimizers=None,
-                 dr_config=None,
                  work_dir=None,
                  logger=None,
                  meta=None,
@@ -167,15 +166,22 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 # distinguish student/teacher loss and optimizer
                 student_optimizer = self.optimizers[0]
                 (student_cls_logits, student_bbox_logits), (teacher_cls_logits, teacher_bbox_logits) = logits
-                student_losses = outputs[0]
+                student_losses = outputs[0]["loss"]
                 student_cls_logits = torch.cat([logit.flatten() for logit in student_cls_logits])
                 teacher_cls_logits = torch.cat([logit.flatten() for logit in teacher_cls_logits])
 
                 # Calculate distillation loss
-                self.opt_hook.num_classes = 81 # TODO
+                if hasattr(self.opt_hook, "num_classes"):
+                    self.opt_hook.num_classes = int(student_cls_logits[0].shape[1]/4)
+                    print("[cyan] num_classes : {0}[/cyan]".format(self.opt_hook.num_classes))
+                if hasattr(self.opt_hook, "num_bboxes"):
+                    self.opt_hook.num_bboxes = 0
+                    for logit in student_cls_logits:
+                        self.opt_hook.num_bboxes += np.array(logit.shape[1:]).prod() / self.opt_hook.num_classes
+                    print("[cyan] num_bboxes : {0}[/cyan]".format(self.opt_hook.num_bboxes))
                 soft_log_probs = F.log_softmax(student_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_targets = F.softmax(teacher_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
-                soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none")
+                soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none") / self.opt_hook.num_bboxes
 
                 if self.opt_hook.use_focal:
                     # compute focal term
@@ -214,7 +220,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     sum_regression_loss = regression_loss.sum()
                     self.overall_loss = self.loss_wts.distill * sum_focal_distillation_loss + self.loss_wts.student * (sum_regression_loss + sum_classification_loss)
                 else:
-                    self.overall_loss = 0.3 * student_losses.sum() + 0.7 * soft_kl_div
+                    self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + self.opt_hook.loss_wts_soft * soft_kl_div.sum()
 
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(self.opt_hook)))
