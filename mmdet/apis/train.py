@@ -86,37 +86,7 @@ def train_detector(model,
     else:
         models = model if isinstance(model, (list, tuple)) else [model]
 
-        # load teacher model
         if hasattr(cfg.optimizer_config, "distill_config"):
-            distill_config = cfg.optimizer_config.distill_config
-            teacher_model = build_detector(distill_config.model,
-                train_cfg=distill_config.train_cfg, test_cfg=distill_config.test_cfg)
-
-            # same logic to init_detector API
-            if distill_config.checkpoint is not None:
-                    map_loc = "cpu"
-                    checkpoint = load_checkpoint(teacher_model, distill_config.checkpoint, map_location=map_loc)
-                    if 'CLASSES' in checkpoint['meta']:
-                        teacher_model.CLASSES = checkpoint['meta']['CLASSES']
-                    else:
-                        warnings.simplefilter('once')
-                        warnings.warn('Class names are not saved in the checkpoint\'s '
-                                    'meta data, use COCO classes by default.')
-                        teacher_model.CLASSES = get_classes('coco')
-            teacher_model.cfg = distill_config  # save the config in the model for convenience
-            teacher_model.to("cpu")
-            teacher_model.eval()
-
-            if verbose > 0:
-                print(Fore.CYAN + "teacher model is loaded : {0}".format(distill_config.checkpoint) + Style.RESET_ALL)
-
-            # append teacher model to list
-            models.append(teacher_model)
-
-            models = [CustomDataParallel(
-                model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
-            model = models[0]
-        elif cfg.optimizer_config.coteaching_method=="per-object":
             models = [CustomDataParallel(
                 model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids) for model in models]
             model = models[0]

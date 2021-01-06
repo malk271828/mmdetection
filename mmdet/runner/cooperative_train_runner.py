@@ -207,7 +207,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                             soft_distance = - (np.log(self.opt_hook.alpha) + soft_log_probs) * (1 - self.opt_hook.alpha) * soft_targets.detach()
                     focal_term = torch.pow(1. - torch.exp( - soft_distance), self.opt_hook.gamma)
 
-                    if self.opt_hook.normalized:
+                    if self.opt_hook.use_normalize:
                         norm_factor = 1.0 / (focal_term.sum() + 1e-5)
                     else:
                         norm_factor = 1.0
@@ -216,13 +216,11 @@ class CooperativeTrainRunner(EpochBasedRunner):
                         print("norm_factor: {0}".format(norm_factor))
                     focal_distillation_loss = focal_term.reshape(-1, self.opt_hook.num_classes) * norm_factor * soft_kl_div
 
-                    sum_focal_distillation_loss = focal_distillation_loss.sum() / num_pos
-                    sum_classification_loss = classification_loss.sum()
-                    sum_regression_loss = regression_loss.sum()
-                    self.overall_loss = self.loss_wts.distill * sum_focal_distillation_loss + self.loss_wts.student * (sum_regression_loss + sum_classification_loss)
+                    sum_focal_distillation_loss = focal_distillation_loss.sum()
+                    self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + (1 - self.opt_hook.loss_wts_hard) * sum_focal_distillation_loss
                 else:
                     sum_soft_kl_div = soft_kl_div.sum()
-                    self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + self.opt_hook.loss_wts_soft * sum_soft_kl_div
+                    self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + (1 - self.opt_hook.loss_wts_hard) * sum_soft_kl_div
 
             else:
                 raise Exception("expected optimizer type is either CooperativeOptimizerHook or DistillationOptimizerHook. But got: {0}".format(type(self.opt_hook)))
@@ -230,9 +228,9 @@ class CooperativeTrainRunner(EpochBasedRunner):
             outputs = [model.val_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
         # register losses to log_buffer in accordance with type of OptimizerHook
-        if isinstance(self.opt_hook, DistillationOptimizerHook):
+        if isinstance(self.opt_hook, DistillationOptimizerHook) and train_mode:
             idx_str = ["student", "teacher"]
-            self.log_buffer.update({"soft_kl_div": sum_soft_kl_div})
+            self.log_buffer.update({"soft_kl_div": sum_soft_kl_div.item()})
         else:
             idx_str = ["1", "2"]
         for i, output in enumerate(outputs):

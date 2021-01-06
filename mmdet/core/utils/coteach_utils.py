@@ -83,6 +83,9 @@ class DistillationOptimizerHook(OptimizerHook):
         self.temperature = distill_config.temperature
         self.use_focal = distill_config.use_focal
         self.use_adaptive = distill_config.use_adaptive
+        self.use_normalize = distill_config.use_normalize
+        if self.verbose > 0:
+            print(distill_config)
 
     def clip_grads(self, params):
         params = list(

@@ -73,6 +73,7 @@ optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
 #                             temperature=1.0,
 #                             use_focal=False,
 #                             use_adaptive=False,
+#                             use_normalize=False,
 #                             checkpoint="checkpoints/ssd300_coco_20200307-a92d2092.pth",
 #                             train_cfg = dict(
 #                                 assigner=dict(
