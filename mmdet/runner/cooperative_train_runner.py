@@ -78,6 +78,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     if hasattr(self.opt_hook, "coteaching_method"):
                         print("[cyan]{0} co-teaching is used[/cyan]".format(self.opt_hook.coteaching_method))
                     else:
+                        if self.opt_hook.use_focal:
+                            self.opt_hook.distillation_method = "focal"
                         print("[cyan]{0} distillation is used[/cyan]".format(self.opt_hook.distillation_method))
         if self.batch_processor is not None:
             outputs = self.batch_processor(
@@ -230,7 +232,10 @@ class CooperativeTrainRunner(EpochBasedRunner):
         # register losses to log_buffer in accordance with type of OptimizerHook
         if isinstance(self.opt_hook, DistillationOptimizerHook) and train_mode:
             idx_str = ["student", "teacher"]
-            self.log_buffer.update({"soft_kl_div": sum_soft_kl_div.item()})
+            if self.opt_hook.use_focal:
+                self.log_buffer.update({"sum_focal_distillation_loss": sum_focal_distillation_loss.item()})
+            else:
+                self.log_buffer.update({"soft_kl_div": sum_soft_kl_div.item()})
         else:
             idx_str = ["1", "2"]
         for i, output in enumerate(outputs):
