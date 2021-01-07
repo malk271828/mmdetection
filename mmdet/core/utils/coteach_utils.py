@@ -79,7 +79,6 @@ class DistillationOptimizerHook(OptimizerHook):
         self.beta = distill_config.beta
         self.gamma = distill_config.gamma
         self.loss_wts_hard = distill_config.loss_wts_hard
-        self.loss_wts_soft = distill_config.loss_wts_soft
         self.temperature = distill_config.temperature
         self.use_focal = distill_config.use_focal
         self.use_adaptive = distill_config.use_adaptive

@@ -80,6 +80,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     else:
                         if self.opt_hook.use_focal:
                             self.opt_hook.distillation_method = "focal"
+                            if self.opt_hook.use_adaptive:
+                                self.opt_hook.distillation_method = "adaptive " + self.opt_hook.distillation_method
                         print("[cyan]{0} distillation is used[/cyan]".format(self.opt_hook.distillation_method))
         if self.batch_processor is not None:
             outputs = self.batch_processor(
