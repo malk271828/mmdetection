@@ -75,6 +75,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
             for hook in self._hooks:
                 if isinstance(hook, OptimizerHook):
                     self.opt_hook = hook
+
+                    # show current method
                     if hasattr(self.opt_hook, "coteaching_method"):
                         print("[cyan]{0} co-teaching is used[/cyan]".format(self.opt_hook.coteaching_method))
                     else:
@@ -101,7 +103,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
             if isinstance(self.opt_hook, CoteachingOptimizerHook):
-                if self.opt_hook.coteaching_method == "naive" or self.opt_hook.coteaching_method == "per-object":
+                if self.opt_hook.coteaching_method in ["naive", "per-object", "focal"]:
                     # naive Co-teaching [Han2018]
                     # per-object co-teaching [Chadwick2019]
                     zip_loss0 = zip(outputs[0]["losses"]["loss_cls"], outputs[0]["losses"]["loss_bbox"])
@@ -110,17 +112,19 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
                     loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
 
-                    if self.opt_hook.coteaching_method == "naive":
+                    if self.opt_hook.coteaching_method in ["naive", "focal"]:
                         argsort_dim = -1
                     else:
                         argsort_dim = 1
-                    ind0_sorted = torch.argsort(loss0, argsort_dim)
-                    loss0_sorted = loss0.gather(argsort_dim, ind0_sorted)
-                    ind1_sorted = torch.argsort(loss1, argsort_dim)
-                    #loss1_sorted = loss1[ind1_sorted]
+                    
+                    if self.opt_hook.coteaching_method in ["naive", "per-object"]:
+                        ind0_sorted = torch.argsort(loss0, argsort_dim)
+                        loss0_sorted = loss0.gather(argsort_dim, ind0_sorted)
+                        ind1_sorted = torch.argsort(loss1, argsort_dim)
+                        #loss1_sorted = loss1[ind1_sorted]
 
-                    drop_rate = self.rate_schedule[self.epoch]
-                    remember_rate = 1 - self.rate_schedule[self.epoch]
+                        drop_rate = self.rate_schedule[self.epoch]
+                        remember_rate = 1 - self.rate_schedule[self.epoch]
 
                     if self.opt_hook.coteaching_method == "naive":
                         num_remember = int(remember_rate * len(loss0_sorted))
@@ -133,7 +137,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
 
                         # pack
                         self.losses_update = [torch.sum(loss0_update)/num_remember, torch.sum(loss1_update)/num_remember]
-                    else:
+                    elif self.opt_hook.coteaching_method == "per-object":
                         num_remember = int(remember_rate * len(loss0_sorted[argsort_dim]))
                         divisor = len(loss0_sorted[0])
                         ind0_update=ind0_sorted[:, :num_remember]
@@ -142,6 +146,17 @@ class CooperativeTrainRunner(EpochBasedRunner):
                         # exchange data sample index
                         loss0_update = loss0[:, ind1_update]
                         loss1_update = loss1[:, ind0_update]                        
+
+                        # pack
+                        self.losses_update = [torch.sum(loss0_update)/divisor, torch.sum(loss1_update)/divisor]
+                    else:
+                        divisor = len(loss0)
+                        focal_term0 = torch.pow(1. - torch.exp( - loss0), self.opt_hook.gamma)
+                        focal_term1 = torch.pow(1. - torch.exp( - loss1), self.opt_hook.gamma)
+
+                        # exchange data focal term
+                        loss0_update = focal_term1 * loss1
+                        loss1_update = focal_term0 * loss0
 
                         # pack
                         self.losses_update = [torch.sum(loss0_update)/divisor, torch.sum(loss1_update)/divisor]
@@ -252,3 +267,8 @@ class CooperativeTrainRunner(EpochBasedRunner):
         for model in self.models:
             model.train()
         super().train(data_loader, **kwargs)
+
+    def val(self, data_loader, **kwargs):
+        for model in self.models:
+            model.eval()
+        super().val(data_loader, **kwargs)
