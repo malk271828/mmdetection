@@ -103,7 +103,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
             outputs = [model.train_step(data_batch, optimizer, **kwargs) for model, optimizer in zip(self.models, self.optimizers)]
 
             if isinstance(self.opt_hook, CoteachingOptimizerHook):
-                if self.opt_hook.coteaching_method in ["naive", "per-object", "focal"]:
+                if self.opt_hook.coteaching_method in ["naive", "per-object"]:
                     # naive Co-teaching [Han2018]
                     # per-object co-teaching [Chadwick2019]
                     zip_loss0 = zip(outputs[0]["losses"]["loss_cls"], outputs[0]["losses"]["loss_bbox"])
@@ -112,7 +112,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     loss0 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss0])
                     loss1 = torch.cat([loss_cls + loss_bbox for loss_cls, loss_bbox in zip_loss1])
 
-                    if self.opt_hook.coteaching_method in ["naive", "focal"]:
+                    if self.opt_hook.coteaching_method in ["naive"]:
                         argsort_dim = -1
                     else:
                         argsort_dim = 1
@@ -149,17 +149,29 @@ class CooperativeTrainRunner(EpochBasedRunner):
 
                         # pack
                         self.losses_update = [torch.sum(loss0_update)/divisor, torch.sum(loss1_update)/divisor]
-                    else:
-                        divisor = len(loss0)
-                        focal_term0 = torch.pow(1. - torch.exp( - loss0), self.opt_hook.gamma)
-                        focal_term1 = torch.pow(1. - torch.exp( - loss1), self.opt_hook.gamma)
+
+                    # update log buffer for co-teaching
+                    self.log_buffer.update({"drop_rate": drop_rate})
+                    self.log_buffer.update({"num_remember": num_remember})
+
+                elif self.opt_hook.coteaching_method == "focal":
+                        cls_loss0 = torch.cat(outputs[0]["losses"]["loss_cls"])
+                        bbox_loss0 = torch.cat(outputs[0]["losses"]["loss_bbox"])
+                        cls_loss1 = torch.cat(outputs[1]["losses"]["loss_cls"])
+                        bbox_loss1 = torch.cat(outputs[1]["losses"]["loss_bbox"])
+
+                        divisor = len(cls_loss0)
+                        focal_term0 = torch.pow(1. - torch.exp( - cls_loss0), self.opt_hook.gamma).detach()
+                        focal_term1 = torch.pow(1. - torch.exp( - cls_loss1), self.opt_hook.gamma).detach()
 
                         # exchange data focal term
-                        loss0_update = focal_term1 * loss1
-                        loss1_update = focal_term0 * loss0
+                        loss0_update = focal_term1 * cls_loss0 + bbox_loss0
+                        loss1_update = focal_term0 * cls_loss1 + bbox_loss1
 
                         # pack
                         self.losses_update = [torch.sum(loss0_update)/divisor, torch.sum(loss1_update)/divisor]
+                else:
+                    raise Exception("Unknown coteaching method")
 
                 # model visualization
                 if verbose > 1:
@@ -174,10 +186,6 @@ class CooperativeTrainRunner(EpochBasedRunner):
                     raise TypeError('"batch_processor()" or "model.train_step()"'
                                     'and "model.val_step()" must return a dict')
                 
-                # update log buffer for co-teaching
-                self.log_buffer.update({"drop_rate": drop_rate})
-                self.log_buffer.update({"num_remember": num_remember})
-
             elif isinstance(self.opt_hook, DistillationOptimizerHook):
                 # logits value is required because log probability should be computed with a temperature parameter.
                 logits = [model.forward_dummy(data_batch) for model, optimizer in zip(self.models, self.optimizers)]
