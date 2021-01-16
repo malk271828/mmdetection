@@ -156,13 +156,13 @@ class CooperativeTrainRunner(EpochBasedRunner):
 
                 elif self.opt_hook.coteaching_method == "focal":
                         cls_loss0 = torch.cat(outputs[0]["losses"]["loss_cls"])
-                        bbox_loss0 = torch.cat(outputs[0]["losses"]["loss_bbox"])
+                        bbox_loss0 = torch.stack(outputs[0]["losses"]["loss_bbox"])
                         cls_loss1 = torch.cat(outputs[1]["losses"]["loss_cls"])
-                        bbox_loss1 = torch.cat(outputs[1]["losses"]["loss_bbox"])
+                        bbox_loss1 = torch.stack(outputs[1]["losses"]["loss_bbox"])
 
                         divisor = len(cls_loss0)
-                        focal_term0 = torch.pow(1. - torch.exp( - cls_loss0), self.opt_hook.gamma).detach()
-                        focal_term1 = torch.pow(1. - torch.exp( - cls_loss1), self.opt_hook.gamma).detach()
+                        focal_term0 = torch.pow(1. - torch.exp( - cls_loss0), self.opt_hook.dr_config.gamma).detach()
+                        focal_term1 = torch.pow(1. - torch.exp( - cls_loss1), self.opt_hook.dr_config.gamma).detach()
 
                         # exchange data focal term
                         loss0_update = focal_term1 * cls_loss0 + bbox_loss0
@@ -222,17 +222,10 @@ class CooperativeTrainRunner(EpochBasedRunner):
                             print("use automated adaptative distillation")
                         soft_log_targets = F.log_softmax(teacher_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                         entropy_target = torch.mean(- soft_targets * soft_log_targets, dim=1).unsqueeze(1).expand(-1, self.opt_hook.num_classes)
-                        soft_distance = soft_kl_div + self.opt_hook.beta * entropy_target
+                        dists_distance = soft_kl_div + self.opt_hook.beta * entropy_target
                     else:
-                        if abs(self.opt_hook.alpha) < self.EPSILON or abs(self.opt_hook.alpha - 1.0) < self.EPSILON:
-                            if self.verbose > 0:
-                                print("Alpha-balancing is disabled")
-                            soft_distance = - soft_log_probs * soft_targets.detach()
-                        else:
-                            if self.verbose > 0:
-                                print("Alpha-balancing is enabled")
-                            soft_distance = - (np.log(self.opt_hook.alpha) + soft_log_probs) * (1 - self.opt_hook.alpha) * soft_targets.detach()
-                    focal_term = torch.pow(1. - torch.exp( - soft_distance), self.opt_hook.gamma)
+                        dists_distance = soft_kl_div.detach()
+                    focal_term = self.opt_hook.alpha * torch.pow(1. - torch.exp( - dists_distance), self.opt_hook.gamma)
 
                     if self.opt_hook.use_normalize:
                         norm_factor = 1.0 / (focal_term.sum() + 1e-5)
