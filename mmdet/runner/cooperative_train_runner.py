@@ -209,7 +209,7 @@ class CooperativeTrainRunner(EpochBasedRunner):
                 teacher_cls_logits = torch.cat([logit.flatten() for logit in teacher_cls_logits])
                 soft_log_probs = F.log_softmax(student_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
                 soft_targets = F.softmax(teacher_cls_logits.reshape(-1, self.opt_hook.num_classes) / self.opt_hook.temperature, dim=1)
-                soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none") / self.opt_hook.num_bboxes
+                soft_kl_div = F.kl_div(soft_log_probs, soft_targets.detach(), reduction="none")
 
                 if self.opt_hook.use_focal:
                     # compute focal term
@@ -231,13 +231,18 @@ class CooperativeTrainRunner(EpochBasedRunner):
                         norm_factor = 1.0 / (focal_term.sum() + 1e-5)
                     else:
                         norm_factor = 1.0
-                    if self.verbose > 0:
-                        print("focal_term shape:{0} range[{1}, {2}]".format(focal_term.shape, torch.min(focal_term), torch.max(focal_term)))
-                        print("norm_factor: {0}".format(norm_factor))
-                    focal_distillation_loss = focal_term.reshape(-1, self.opt_hook.num_classes) * norm_factor * soft_kl_div
 
+                    focal_distillation_loss = focal_term.reshape(-1, self.opt_hook.num_classes) * norm_factor * soft_kl_div * soft_targets
                     sum_focal_distillation_loss = focal_distillation_loss.sum()
                     self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + (1 - self.opt_hook.loss_wts_hard) * sum_focal_distillation_loss
+
+                    if self.verbose > 0:
+                        print("soft_targets shape:{0} range[{1}, {2}]".format(soft_targets.shape, torch.min(soft_targets), torch.max(soft_targets)))
+                        print("soft_kl_div shape:{0} range[{1}, {2}]".format(soft_kl_div.shape, torch.min(soft_kl_div), torch.max(soft_kl_div)))
+                        print("focal_term shape:{0} range[{1}, {2}]".format(focal_term.shape, torch.min(focal_term), torch.max(focal_term)))
+                        print("focal_distillation_loss shape:{0} range[{1}, {2}]".format(focal_distillation_loss.shape, torch.min(focal_distillation_loss), torch.max(focal_distillation_loss)))
+                        print("norm_factor: {0}".format(norm_factor))
+
                 else:
                     sum_soft_kl_div = soft_kl_div.sum()
                     self.overall_loss = self.opt_hook.loss_wts_hard * student_losses.sum() + (1 - self.opt_hook.loss_wts_hard) * sum_soft_kl_div
