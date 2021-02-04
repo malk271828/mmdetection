@@ -1,5 +1,88 @@
 ## Changelog
 
+### v2.9.0 (01/02/2021)
+
+#### Highlights
+
+- Support new methods: [SCNet](https://arxiv.org/abs/2012.10150), [Sparse R-CNN](https://arxiv.org/abs/2011.12450)
+- Move `train_cfg` and `test_cfg` into model in configs
+- Support to visualize results based on prediction quality
+
+#### New Features
+
+- Support [SCNet](https://arxiv.org/abs/2012.10150) (#4356)
+- Support [Sparse R-CNN](https://arxiv.org/abs/2011.12450) (#4219)
+- Support evaluate mAP by multiple IoUs (#4398)
+- Support concatenate dataset for testing (#4452)
+- Support to visualize results based on prediction quality (#4441)
+- Add ONNX simplify option to Pytorch2ONNX script (#4468)
+- Add hook for checking compatibility of class numbers in heads and datasets (#4508)
+
+#### Bug Fixes
+
+- Fix CPU inference bug of Cascade RPN (#4410)
+- Fix NMS error of CornerNet when there is no prediction box (#4409)
+- Fix TypeError in CornerNet inference (#4411)
+- Fix bug of PAA when training with background images (#4391)
+- Fix the error that the window data is not destroyed when `out_file is not None` and `show==False` (#4442)
+- Fix order of NMS `score_factor` that will decrease the performance of YOLOv3 (#4473)
+- Fix bug in HTC TTA when the number of detection boxes is 0 (#4516)
+- Fix resize error in mask data structures (#4520)
+
+#### Improvements
+
+- Allow to customize classes in LVIS dataset (#4382)
+- Add tutorials for building new models with existing datasets (#4396)
+- Add CPU compatibility information in documentation (#4405)
+- Add documentation of deprecated `ImageToTensor` for batch inference (#4408)
+- Add more details in documentation for customizing dataset (#4430)
+- Switch `imshow_det_bboxes` visualization backend from OpenCV to Matplotlib (#4389)
+- Deprecate `ImageToTensor` in `image_demo.py` (#4400)
+- Move train_cfg/test_cfg into model (#4347, #4489)
+- Update docstring for `reg_decoded_bbox` option in bbox heads (#4467)
+- Update dataset information in documentation (#4525)
+- Release pre-trained R50 and R101 PAA detectors with multi-scale 3x training schedules (#4495)
+- Add guidance for speed benchmark (#4537)
+
+### v2.8.0 (04/01/2021)
+
+#### Highlights
+
+- Support new methods: [Cascade RPN](https://arxiv.org/abs/1909.06720), [TridentNet](https://arxiv.org/abs/1901.01892)
+
+#### New Features
+
+- Support [Cascade RPN](https://arxiv.org/abs/1909.06720) (#1900)
+- Support [TridentNet](https://arxiv.org/abs/1901.01892) (#3313)
+
+#### Bug Fixes
+
+- Fix bug of show result in async_benchmark (#4367)
+- Fix scale factor in MaskTestMixin (#4366)
+- Fix but when returning indices in `multiclass_nms` (#4362)
+- Fix bug of empirical attention in resnext backbone error (#4300)
+- Fix bug of `img_norm_cfg` in FCOS-HRNet models with updated performance and models (#4250)
+- Fix invalid checkpoint and log in Mask R-CNN models on Cityscapes dataset (#4287)
+- Fix bug in distributed sampler when dataset is too small (#4257)
+- Fix bug of 'PAFPN has no attribute extra_convs_on_inputs' (#4235)
+
+#### Improvements
+
+- Update model url from aws to aliyun (#4349)
+- Update ATSS for PyTorch 1.6+ (#4359)
+- Update script to install ruby in pre-commit installation (#4360)
+- Delete deprecated `mmdet.ops` (#4325)
+- Refactor hungarian assigner for more general usage in Sparse R-CNN (#4259)
+- Handle scipy import in DETR to reduce package dependencies (#4339)
+- Update documentation of usages for config options after MMCV (1.2.3) supports overriding list in config (#4326)
+- Update pre-train models of faster rcnn trained on COCO subsets (#4307)
+- Avoid zero or too small value for beta in Dynamic R-CNN (#4303)
+- Add doccumentation for Pytorch2ONNX (#4271)
+- Add deprecated warning FPN arguments (#4264)
+- Support returning indices of kept bboxes when using nms (#4251)
+- Update type and device requirements when creating tensors `GFLHead` (#4210)
+- Update device requirements when creating tensors in `CrossEntropyLoss` (#4224)
+
 ### v2.7.0 (30/11/2020)
 
 - Support new method: [DETR](https://arxiv.org/abs/2005.12872), [ResNest](https://arxiv.org/abs/2004.08955), Faster R-CNN DC5.
@@ -82,7 +165,7 @@
 #### Backwards Incompatible Changes
 
 **FP16 related methods are imported from mmcv instead of mmdet. (#3766, #3822)**
-Mixed precision training utils in `mmdet.core.fp16` are moved to `mmcv.runner`, including `force_fp32`, `auto_fp16`, `wrap_fp16_model`, and `Fp16OptimizerHook`. A deprecation warning will be raised if users attempt to import those methods from `mmdet.core.fp16`, and will be finally removed in V2.8.0.
+Mixed precision training utils in `mmdet.core.fp16` are moved to `mmcv.runner`, including `force_fp32`, `auto_fp16`, `wrap_fp16_model`, and `Fp16OptimizerHook`. A deprecation warning will be raised if users attempt to import those methods from `mmdet.core.fp16`, and will be finally removed in V2.10.0.
 
 **[0, N-1] represents foreground classes and N indicates background classes for all models. (#3221)**
 Before v2.5.0, the background label for RPN is 0, and N for other heads. Now the behavior is consistent for all models. Thus `self.background_labels` in `dense_heads` is removed and all heads use `self.num_classes` to indicate the class index of background labels.
