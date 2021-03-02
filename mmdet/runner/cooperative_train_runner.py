@@ -256,8 +256,10 @@ class CooperativeTrainRunner(EpochBasedRunner):
         if isinstance(self.opt_hook, DistillationOptimizerHook) and train_mode:
             idx_str = ["student", "teacher"]
             if self.opt_hook.use_focal:
+                sum_focal_term = focal_term.sum()
+                sum_soft_kl_div = soft_kl_div.sum()
+                self.log_buffer.update({"focal_term": sum_focal_term.item()})
                 self.log_buffer.update({"sum_focal_distillation_loss": sum_focal_distillation_loss.item()})
-            else:
                 self.log_buffer.update({"soft_kl_div": sum_soft_kl_div.item()})
         else:
             idx_str = ["1", "2"]
