@@ -1,7 +1,7 @@
 # model settings
 model = dict(
     type='TTFNet',
-    pretrained='modelzoo://resnet18',
+    pretrained='torchvision://resnet18',
     backbone=dict(
         type='ResNet',
         depth=18,
@@ -18,7 +18,7 @@ model = dict(
         wh_conv=64,
         hm_head_conv_num=2,
         wh_head_conv_num=1,
-        num_classes=81,
+        num_classes=80,
         wh_offset_base=16,
         wh_agnostic=True,
         wh_gaussian=True,
@@ -26,15 +26,16 @@ model = dict(
         norm_cfg=dict(type='BN'),
         alpha=0.54,
         hm_weight=1.,
-        wh_weight=5.))
+        wh_weight=5.),
+    # training and testing settings
+    train_cfg = dict(
+        vis_every_n_iters=100,
+        debug=False),
+    test_cfg = dict(
+        score_thr=0.01,
+        max_per_img=100)
+)
 cudnn_benchmark = True
-# training and testing settings
-train_cfg = dict(
-    vis_every_n_iters=100,
-    debug=False)
-test_cfg = dict(
-    score_thr=0.01,
-    max_per_img=100)
 # dataset settings
 dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
@@ -85,7 +86,7 @@ data = dict(
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.016, momentum=0.9, weight_decay=0.0004,
-                 paramwise_options=dict(bias_lr_mult=2., bias_decay_mult=0.))
+                 paramwise_cfg=dict(bias_lr_mult=2., bias_decay_mult=0.))
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
