@@ -57,7 +57,7 @@ class TTFHead(AnchorHead):
                  wh_conv=64,
                  hm_head_conv_num=2,
                  wh_head_conv_num=2,
-                 num_classes=81,
+                 num_classes=80,
                  shortcut_kernel=3,
                  norm_cfg=dict(type='BN'),
                  shortcut_cfg=(1, 2, 3),
@@ -94,7 +94,7 @@ class TTFHead(AnchorHead):
         self.fp16_enabled = False
 
         self.down_ratio = base_down_ratio // 2 ** len(planes)
-        self.num_fg = num_classes - 1
+        self.num_fg = num_classes
         self.wh_planes = 4 if wh_agnostic else 4 * self.num_fg
         self.base_loc = None
 
@@ -215,7 +215,8 @@ class TTFHead(AnchorHead):
         # perform nms on heatmaps
         heat = simple_nms(pred_heatmap)  # used maxpool to filter the max score
 
-        topk = getattr(cfg, 'max_per_img', 100)
+        #topk = getattr(cfg, 'max_per_img', 100)
+        topk = 100
         # (batch, topk)
         scores, inds, clses, ys, xs = self._topk(heat, topk=topk)
         xs = xs.view(batch, topk, 1) * self.down_ratio
@@ -239,7 +240,8 @@ class TTFHead(AnchorHead):
                             xs + wh[..., [2]], ys + wh[..., [3]]], dim=2)
 
         result_list = []
-        score_thr = getattr(cfg, 'score_thr', 0.01)
+        #score_thr = getattr(cfg, 'score_thr', 0.01)
+        score_thr = 0.01
         for batch_i in range(bboxes.shape[0]):
             scores_per_img = scores[batch_i]
             scores_keep = (scores_per_img > score_thr).squeeze(-1)
