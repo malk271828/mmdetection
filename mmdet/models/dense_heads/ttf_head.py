@@ -20,22 +20,22 @@ def simple_nms(heat, kernel=3, out_heat=None):
     out_heat = heat if out_heat is None else out_heat
     return out_heat * keep
 
-def ct_focal_loss(pred, gt, gamma=2.0):
+def ct_focal_loss(pred, gt, alpha_f=2.0, beta_f=4.0):
     """
     Focal loss used in CornerNet & CenterNet. Note that the values in gt (label) are in [0, 1] since
     gaussian is used to reduce the punishment and we treat [0, 1) as neg example.
     Args:
         pred: tensor, any shape.
         gt: tensor, same as pred.
-        gamma: gamma in focal loss.
+        alpha_f: gamma in focal loss.
     Returns:
     """
     pos_inds = gt.eq(1).float()
     neg_inds = gt.lt(1).float()
 
-    neg_weights = torch.pow(1 - gt, 4)  # reduce punishment
-    pos_loss = -torch.log(pred) * torch.pow(1 - pred, gamma) * pos_inds
-    neg_loss = -torch.log(1 - pred) * torch.pow(pred, gamma) * neg_weights * neg_inds
+    neg_weights = torch.pow(1 - gt, beta_f)  # reduce punishment
+    pos_loss = -torch.log(pred) * torch.pow(1 - pred, alpha_f) * pos_inds
+    neg_loss = -torch.log(1 - pred) * torch.pow(pred, alpha_f) * neg_weights * neg_inds
 
     num_pos = pos_inds.float().sum()
     pos_loss = pos_loss.sum()
@@ -45,7 +45,7 @@ def ct_focal_loss(pred, gt, gamma=2.0):
         return neg_loss
     return (pos_loss + neg_loss) / num_pos
 
-@HEADS.register_module
+@HEADS.register_module()
 class TTFHead(AnchorHead):
 
     def __init__(self,
@@ -135,7 +135,7 @@ class TTFHead(AnchorHead):
 
     def build_upsample(self, inplanes, planes, norm_cfg=None):
         mdcn = ModulatedDeformConv2dPack(inplanes, planes, 3, stride=1,
-                                       padding=1, dilation=1, deformable_groups=1)
+                                       padding=1, dilation=1, deform_groups=1)
         up = nn.UpsamplingBilinear2d(scale_factor=2)
 
         layers = []
@@ -186,8 +186,8 @@ class TTFHead(AnchorHead):
             feats: list(tensor).
 
         Returns:
-            hm: tensor, (batch, 80, h, w).
-            wh: tensor, (batch, 4, h, w) or (batch, 80 * 4, h, w).
+            hm: tensor, (batch, num_class, h, w).
+            wh: tensor, (batch, 4, h, w) or (batch, num_class * 4, h, w).
         """
         x = feats[-1]
         if not self.use_dla:
@@ -333,8 +333,8 @@ class TTFHead(AnchorHead):
             feat_shape: tuple.
 
         Returns:
-            heatmap: tensor, tensor <=> img, (80, h, w).
-            box_target: tensor, tensor <=> img, (4, h, w) or (80 * 4, h, w).
+            heatmap: tensor, tensor <=> img, (num_class, h, w).
+            box_target: tensor, tensor <=> img, (4, h, w) or (num_class * 4, h, w).
             reg_weight: tensor, same as box_target
         """
         output_h, output_w = feat_shape
@@ -435,8 +435,8 @@ class TTFHead(AnchorHead):
             img_metas: list(dict).
 
         Returns:
-            heatmap: tensor, (batch, 80, h, w).
-            box_target: tensor, (batch, 4, h, w) or (batch, 80 * 4, h, w).
+            heatmap: tensor, (batch, num_class, h, w).
+            box_target: tensor, (batch, 4, h, w) or (batch, num_class * 4, h, w).
             reg_weight: tensor, same as box_target.
         """
         with torch.no_grad():
@@ -463,8 +463,8 @@ class TTFHead(AnchorHead):
         """
 
         Args:
-            pred_hm: tensor, (batch, 80, h, w).
-            pred_wh: tensor, (batch, 4, h, w) or (batch, 80 * 4, h, w).
+            pred_hm: tensor, (batch, num_class, h, w).
+            pred_wh: tensor, (batch, 4, h, w) or (batch, num_class * 4, h, w).
             heatmap: tensor, same as pred_hm.
             box_target: tensor, same as pred_wh.
             wh_weight: tensor, same as pred_wh.
