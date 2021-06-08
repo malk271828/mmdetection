@@ -149,7 +149,6 @@ class SSDHead(AnchorHead):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
-
         if self.reg_decoded_bbox:
             # When the regression loss (e.g. `IouLoss`, `GIouLoss`)
             # is applied directly on the decoded bounding boxes, it
