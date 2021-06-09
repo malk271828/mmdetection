@@ -5,14 +5,14 @@ from mmcv.runner import ModuleList, force_fp32
 
 from mmdet.core import (build_anchor_generator, build_assigner,
                         build_bbox_coder, build_sampler, multi_apply)
-from ..builder import HEADS
+from ..builder import HEADS, build_loss
 from ..losses import smooth_l1_loss
-from .anchor_head import AnchorHead
+from .ssd_head import SSDHead
 
 
 # TODO: add loss evaluator for SSD
 @HEADS.register_module()
-class SSDHead(AnchorHead):
+class KDSSDHead(SSDHead):
     """SSD head used in https://arxiv.org/abs/1512.02325.
 
     Args:
@@ -32,95 +32,18 @@ class SSDHead(AnchorHead):
     """  # noqa: W605
 
     def __init__(self,
-                 num_classes=80,
-                 in_channels=(512, 1024, 512, 256, 256, 256),
-                 anchor_generator=dict(
-                     type='SSDAnchorGenerator',
-                     scale_major=False,
-                     input_size=300,
-                     strides=[8, 16, 32, 64, 100, 300],
-                     ratios=([2], [2, 3], [2, 3], [2, 3], [2], [2]),
-                     basesize_ratio_range=(0.1, 0.9)),
-                 bbox_coder=dict(
-                     type='DeltaXYWHBBoxCoder',
-                     clip_border=True,
-                     target_means=[.0, .0, .0, .0],
-                     target_stds=[1.0, 1.0, 1.0, 1.0],
-                 ),
-                 reg_decoded_bbox=False,
-                 train_cfg=None,
-                 test_cfg=None,
-                 init_cfg=dict(
-                     type='Xavier',
-                     layer='Conv2d',
-                     distribution='uniform',
-                     bias=0)):
-        super(AnchorHead, self).__init__(init_cfg)
-        self.num_classes = num_classes
-        self.in_channels = in_channels
-        self.cls_out_channels = num_classes + 1  # add background class
-        self.anchor_generator = build_anchor_generator(anchor_generator)
-        num_anchors = self.anchor_generator.num_base_anchors
-
-        reg_convs = []
-        cls_convs = []
-        for i in range(len(in_channels)):
-            reg_convs.append(
-                nn.Conv2d(
-                    in_channels[i],
-                    num_anchors[i] * 4,
-                    kernel_size=3,
-                    padding=1))
-            cls_convs.append(
-                nn.Conv2d(
-                    in_channels[i],
-                    num_anchors[i] * (num_classes + 1),
-                    kernel_size=3,
-                    padding=1))
-        self.reg_convs = ModuleList(reg_convs)
-        self.cls_convs = ModuleList(cls_convs)
-
-        self.bbox_coder = build_bbox_coder(bbox_coder)
-        self.reg_decoded_bbox = reg_decoded_bbox
-        self.use_sigmoid_cls = False
-        self.cls_focal_loss = False
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
-        # set sampling=False for archor_target
-        self.sampling = False
-        if self.train_cfg:
-            self.assigner = build_assigner(self.train_cfg.assigner)
-            # SSD sampling=False so use PseudoSampler
-            sampler_cfg = dict(type='PseudoSampler')
-            self.sampler = build_sampler(sampler_cfg, context=self)
-        self.fp16_enabled = False
-
-    def forward(self, feats):
-        """Forward features from the upstream network.
-
-        Args:
-            feats (tuple[Tensor]): Features from the upstream network, each is
-                a 4D-tensor.
-
-        Returns:
-            tuple:
-                cls_scores (list[Tensor]): Classification scores for all scale
-                    levels, each is a 4D-tensor, the channels number is
-                    num_anchors * num_classes.
-                bbox_preds (list[Tensor]): Box energies / deltas for all scale
-                    levels, each is a 4D-tensor, the channels number is
-                    num_anchors * 4.
-        """
-        cls_scores = []
-        bbox_preds = []
-        for feat, reg_conv, cls_conv in zip(feats, self.reg_convs,
-                                            self.cls_convs):
-            cls_scores.append(cls_conv(feat))
-            bbox_preds.append(reg_conv(feat))
-        return cls_scores, bbox_preds
+                 num_classes,
+                 in_channels,
+                 loss_ld=dict(
+                     type='LocalizationDistillationLoss',
+                     loss_weight=0.25,
+                     T=10),
+                 **kwargs):
+        super(KDSSDHead, self).__init__(num_classes, in_channels, **kwargs)
+        self.loss_ld = build_loss(loss_ld)
 
     def loss_single(self, cls_score, bbox_pred, anchor, labels, label_weights,
-                    bbox_targets, bbox_weights, num_total_samples):
+                    bbox_targets, bbox_weights, soft_targets, num_total_samples):
         """Compute loss of a single image.
 
         Args:
@@ -177,12 +100,56 @@ class SSDHead(AnchorHead):
             avg_factor=num_total_samples)
         return loss_cls[None], loss_bbox
 
+    def forward_train(self,
+                      x,
+                      out_teacher,
+                      img_metas,
+                      gt_bboxes,
+                      gt_labels=None,
+                      gt_bboxes_ignore=None,
+                      proposal_cfg=None,
+                      **kwargs):
+        """
+        Args:
+            x (list[Tensor]): Features from FPN.
+            img_metas (list[dict]): Meta information of each image, e.g.,
+                image size, scaling factor, etc.
+            gt_bboxes (Tensor): Ground truth bboxes of the image,
+                shape (num_gts, 4).
+            gt_labels (Tensor): Ground truth labels of each box,
+                shape (num_gts,).
+            gt_bboxes_ignore (Tensor): Ground truth bboxes to be
+                ignored, shape (num_ignored_gts, 4).
+            proposal_cfg (mmcv.Config): Test / postprocessing configuration,
+                if None, test_cfg would be used
+
+        Returns:
+            tuple[dict, list]: The loss components and proposals of each image.
+
+            - losses (dict[str, Tensor]): A dictionary of loss components.
+            - proposal_list (list[Tensor]): Proposals of each image.
+        """
+        outs = self(x)
+        soft_target = out_teacher[1]
+        if gt_labels is None:
+            loss_inputs = outs + (gt_bboxes, soft_target, img_metas)
+        else:
+            loss_inputs = outs + (gt_bboxes, gt_labels, soft_target, img_metas)
+        losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+        if proposal_cfg is None:
+            return losses
+        else:
+            proposal_list = self.get_bboxes(*outs, img_metas, cfg=proposal_cfg)
+            return losses, proposal_list
+
+
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
              cls_scores,
              bbox_preds,
              gt_bboxes,
              gt_labels,
+             soft_target,
              img_metas,
              gt_bboxes_ignore=None):
         """Compute losses of the head.
@@ -207,7 +174,6 @@ class SSDHead(AnchorHead):
         assert len(featmap_sizes) == self.anchor_generator.num_levels
 
         device = cls_scores[0].device
-
         anchor_list, valid_flag_list = self.get_anchors(
             featmap_sizes, img_metas, device=device)
         cls_reg_targets = self.get_targets(
@@ -261,5 +227,6 @@ class SSDHead(AnchorHead):
             all_label_weights,
             all_bbox_targets,
             all_bbox_weights,
+            soft_target,
             num_total_samples=num_total_pos)
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)

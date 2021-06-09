@@ -1,8 +1,63 @@
 _base_ = [
-    '../_base_/models/ssd300.py', '../_base_/datasets/coco_detection.py',
+    '../_base_/datasets/coco_detection.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
 ]
 # dataset settings
+input_size = 300
+teacher_ckpt = 'http://download.openmmlab.com/mmdetection/v2.0/ssd/ssd300_coco/ssd300_coco_20200307-a92d2092.pth'  # noqa
+model = dict(
+    type='KnowledgeDistillationSingleStageDetector',
+    pretrained='open-mmlab://vgg16_caffe',
+    teacher_config='configs/ssd/ssd300_coco.py',
+    teacher_ckpt=teacher_ckpt,
+    backbone=dict(
+        type='SSDVGG',
+        input_size=input_size,
+        depth=16,
+        with_last_pool=False,
+        ceil_mode=True,
+        out_indices=(3, 4),
+        out_feature_indices=(22, 34),
+        l2_norm_scale=20),
+    neck=None,
+    bbox_head=dict(
+        type='KDSSDHead',
+        in_channels=(512, 1024, 512, 256, 256, 256),
+        num_classes=80,
+        loss_ld=dict(
+            type='KnowledgeDistillationKLDivLoss', loss_weight=0.25, T=10),
+        anchor_generator=dict(
+            type='SSDAnchorGenerator',
+            scale_major=False,
+            input_size=input_size,
+            basesize_ratio_range=(0.15, 0.9),
+            strides=[8, 16, 32, 64, 100, 300],
+            ratios=[[2], [2, 3], [2, 3], [2, 3], [2], [2]]),
+        bbox_coder=dict(
+            type='DeltaXYWHBBoxCoder',
+            target_means=[.0, .0, .0, .0],
+            target_stds=[0.1, 0.1, 0.2, 0.2])),
+    train_cfg=dict(
+        assigner=dict(
+            type='MaxIoUAssigner',
+            pos_iou_thr=0.5,
+            neg_iou_thr=0.5,
+            min_pos_iou=0.,
+            ignore_iof_thr=-1,
+            gt_max_assign_all=False),
+        smoothl1_beta=1.,
+        allowed_border=-1,
+        pos_weight=-1,
+        neg_pos_ratio=3,
+        debug=False),
+    test_cfg=dict(
+        nms_pre=1000,
+        nms=dict(type='nms', iou_threshold=0.45),
+        min_bbox_size=0,
+        score_thr=0.02,
+        max_per_img=200))
+cudnn_benchmark = True
+
 dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[1, 1, 1], to_rgb=True)
@@ -58,4 +113,6 @@ data = dict(
     val=dict(pipeline=test_pipeline),
     test=dict(pipeline=test_pipeline))
 # optimizer
+total_epochs = 24
 optimizer = dict(type='SGD', lr=2e-3, momentum=0.9, weight_decay=5e-4)
+runner = dict(max_epochs=24)
