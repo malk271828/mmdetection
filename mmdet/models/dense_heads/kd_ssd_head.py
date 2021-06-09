@@ -68,9 +68,11 @@ class KDSSDHead(SSDHead):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
-
         loss_cls_all = F.cross_entropy(
             cls_score, labels, reduction='none') * label_weights
+        soft_cls_all = F.kl_div(cls_score, soft_targets.detach(),
+            reduction="mean")
+        loss_cls_all = 0.7*loss_cls_all + 0.3*soft_cls_all
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         pos_inds = ((labels >= 0) & (labels < self.num_classes)).nonzero(
             as_tuple=False).reshape(-1)
@@ -130,7 +132,7 @@ class KDSSDHead(SSDHead):
             - proposal_list (list[Tensor]): Proposals of each image.
         """
         outs = self(x)
-        soft_target = out_teacher[1]
+        soft_target = out_teacher[0] # choose cls_loss
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, soft_target, img_metas)
         else:
@@ -195,6 +197,10 @@ class KDSSDHead(SSDHead):
             s.permute(0, 2, 3, 1).reshape(
                 num_images, -1, self.cls_out_channels) for s in cls_scores
         ], 1)
+        all_soft_target = torch.cat([
+            s.permute(0, 2, 3, 1).reshape(
+                num_images, -1, self.cls_out_channels) for s in soft_target
+        ], 1)
         all_labels = torch.cat(labels_list, -1).view(num_images, -1)
         all_label_weights = torch.cat(label_weights_list,
                                       -1).view(num_images, -1)
@@ -227,6 +233,6 @@ class KDSSDHead(SSDHead):
             all_label_weights,
             all_bbox_targets,
             all_bbox_weights,
-            soft_target,
+            all_soft_target,
             num_total_samples=num_total_pos)
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
