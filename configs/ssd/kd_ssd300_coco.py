@@ -24,7 +24,7 @@ model = dict(
         type='KDSSDHead',
         in_channels=(512, 1024, 512, 256, 256, 256),
         num_classes=80,
-        loss_ld=dict(
+        loss_kd=dict(
             type='KnowledgeDistillationKLDivLoss', loss_weight=0.25, T=10),
         anchor_generator=dict(
             type='SSDAnchorGenerator',

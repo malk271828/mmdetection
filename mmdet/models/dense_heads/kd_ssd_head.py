@@ -34,13 +34,13 @@ class KDSSDHead(SSDHead):
     def __init__(self,
                  num_classes,
                  in_channels,
-                 loss_ld=dict(
+                 loss_kd=dict(
                      type='LocalizationDistillationLoss',
                      loss_weight=0.25,
                      T=10),
                  **kwargs):
         super(KDSSDHead, self).__init__(num_classes, in_channels, **kwargs)
-        self.loss_ld = build_loss(loss_ld)
+        self.loss_kd = build_loss(loss_kd)
 
     def loss_single(self, cls_score, bbox_pred, anchor, labels, label_weights,
                     bbox_targets, bbox_weights, soft_targets, num_total_samples):
@@ -72,7 +72,14 @@ class KDSSDHead(SSDHead):
             cls_score, labels, reduction='none') * label_weights
         soft_cls_all = F.kl_div(cls_score, soft_targets.detach(),
             reduction="mean")
-        loss_cls_all = 0.7*loss_cls_all + 0.3*soft_cls_all
+
+        # ld loss
+        loss_kd = self.loss_kd(
+            cls_score,
+            soft_targets,
+            weight=label_weights,
+            avg_factor=4.0)
+
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         pos_inds = ((labels >= 0) & (labels < self.num_classes)).nonzero(
             as_tuple=False).reshape(-1)
@@ -100,7 +107,7 @@ class KDSSDHead(SSDHead):
             bbox_weights,
             beta=self.train_cfg.smoothl1_beta,
             avg_factor=num_total_samples)
-        return loss_cls[None], loss_bbox
+        return loss_cls[None], loss_bbox, loss_kd
 
     def forward_train(self,
                       x,
@@ -224,7 +231,7 @@ class KDSSDHead(SSDHead):
         assert torch.isfinite(all_bbox_preds).all().item(), \
             'bbox predications become infinite or NaN!'
 
-        losses_cls, losses_bbox = multi_apply(
+        losses_cls, losses_bbox, losses_kd = multi_apply(
             self.loss_single,
             all_cls_scores,
             all_bbox_preds,
@@ -235,4 +242,4 @@ class KDSSDHead(SSDHead):
             all_bbox_weights,
             all_soft_target,
             num_total_samples=num_total_pos)
-        return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        return dict(loss_cls=losses_cls, loss_bbox=losses_bbox, loss_kd=losses_kd)
